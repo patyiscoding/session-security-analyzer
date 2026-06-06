@@ -3,6 +3,7 @@ import re
 from JWTAnalyzer import JWTAnalyzer
 from log import log
 from CookiesAnalyzer import CookiesAnalyzer
+from helpers import Helpers
 
 class SessionAnalyzer:
     def request(self, flow: http.HTTPFlow):
@@ -25,8 +26,12 @@ class SessionAnalyzer:
         if len(SETCOOKIES) != 0:
             CookiesAnalyzer.evaluateSETCOOKIES(SETCOOKIES)
         
-        # ---------------------------------JWT ANALYSIS----------------------------------------
+       
         AUTHORIZATION = flow.request.headers.get("Authorization", "")
+        # if flow.request.scheme == "http" and (AUTHORIZATION != "" or flow.request.headers.get("Cookie", "") != ""):
+        #     Helpers.vulnerabilityFound(f'Sensitive data ({flow.request.headers.get("Authorization", "")} {flow.request.headers.get("Cookie", "")}) being sent over the insecure HTTP protocol')
+        
+        # ---------------------------------JWT ANALYSIS----------------------------------------
         JWTAnalyzerInstance = JWTAnalyzer()
 
         # From Authorization header
