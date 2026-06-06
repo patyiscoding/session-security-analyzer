@@ -3,6 +3,8 @@ from log import log
 import jwt
 import json
 from mitmproxy import http, ctx
+from helpers import Helpers
+import copy
 
 class JWTAnalyzer:
     def __init__(self):
@@ -20,7 +22,7 @@ class JWTAnalyzer:
             return
 
 
-        log.info(f"JWT extracted for path {flow.request.path}: {JWT}. Evaluating...")
+        log.info(f"JWT extracted for path {flow.request.url}: {JWT}. Evaluating...")
         self.fuzzedJWTs.add(JWT)
 
         try:
@@ -31,7 +33,7 @@ class JWTAnalyzer:
             # Attackers can change 'alg' to 'none', remove the signature, and forge data.
             alg = unverifiedHeader.get("alg", "").lower()
             if alg == "none":
-                log.warning(f"JWT 'none' algorithm is used by the client!")
+                Helpers.vulnerabilityFound("JWT 'none' algorithm is used by the client")
             
 
             # --- TEST 2: Weak/Insecure Signature Algorithms ---
@@ -43,13 +45,18 @@ class JWTAnalyzer:
             # --- TEST 3: Sensitive Information Leakage in Payload ---
             # JWT payloads are NOT encrypted; they are only base64 encoded. anyone can read them.
             sensitiveKeywords = ["password", "secret", "ssn", "role", "admin"]
-            payload_string = json.dumps(unverifiedPayload).lower()
-            
+            lower_payload = {
+                k.lower(): copy.deepcopy(v)
+                for k, v in unverifiedPayload.items()
+            }
+
             for keyword in sensitiveKeywords:
-                if keyword in payload_string:
-                    log.warning(f"Potential sensitive data leakage; JWT Payload contains keyword '{keyword}': {json.dumps(unverifiedPayload, indent=4)}")
-                if keyword == "role":
-                    self.attackClaimChange(flow, JWT, "role", "admin", unverifiedPayload["data"][keyword])
+                if keyword in lower_payload:
+                    log.warning(f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(lower_payload, indent=4)}")
+                    
+                    if keyword == "role":
+                        log.info(json.dumps(unverifiedPayload))
+                        self.attackClaimChange(flow, JWT, "role", "admin", lower_payload[keyword])
 
             # change role to admin
             #if hs256, then compute hashes using hashcat
@@ -65,7 +72,7 @@ class JWTAnalyzer:
             self.attackWithAlgNone(flow, JWT)
 
         except Exception as e:
-            log.error(e)
+            log.exception(e)
             pass
 
         return
@@ -106,7 +113,6 @@ class JWTAnalyzer:
         ctx.master.commands.call("replay.client", [attackFlow])
 
 
-
     def attackClaimChange(self, flow, JWT, claimToChange, newClaimValue, previousValue):
         log.debug(f"ATTACK: JWT claim {claimToChange} switched to {newClaimValue} from {previousValue}")
         JWTWithClaimChanged = None
@@ -140,14 +146,13 @@ class JWTAnalyzer:
         ctx.master.commands.call("replay.client", [attackFlow])
 
 
-
     def evaluateAttackResponse(self, attackFlow: http.HTTPFlow, attackHeader):
         log.debug("Evaluating attack response")
         originalStatus = attackFlow.metadata.get("originalStatus")
         log.debug(f"Original HTTP status: {originalStatus}")
         attackStatus = attackFlow.response.status_code
         log.debug(f"New HTTP status: {attackStatus}")
-        path = attackFlow.request.path
+        path = attackFlow.request.url
 
         message = ""
         if attackStatus in [401, 403, 500]:
@@ -165,7 +170,7 @@ class JWTAnalyzer:
                 case "Active-Attack-Claim":
                     message = "role claim change accepted"
 
-            log.critical(f"[⚠️] VULNERABILITY FOUND: {message} on {path} ({attackStatus})")
+            Helpers.vulnerabilityFound(f"{message} on {path} ({attackStatus})")
 
     def evaluateCORS():
         # 

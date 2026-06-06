@@ -1,6 +1,7 @@
 # Source - https://stackoverflow.com/a/56944256
 # Posted by Sergey Pleshakov, modified by community. See post 'Timeline' for change history
 # Retrieved 2026-06-06, License - CC BY-SA 4.0
+# Modified
 
 import logging
 class CustomFormatter(logging.Formatter):
@@ -30,8 +31,13 @@ class CustomFormatter(logging.Formatter):
 
 log = logging.getLogger("")
 log.setLevel(logging.DEBUG)
+log.propagate = False
+
+log.handlers.clear()
 
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 ch.setFormatter(CustomFormatter())
 log.addHandler(ch)
+
+logging.getLogger("mitmproxy").setLevel(logging.WARNING)

@@ -1,4 +1,9 @@
 from log import log
+import logging
+import re
+from dateutil import parser
+from datetime import datetime, timedelta, timezone
+from helpers import Helpers
 
 class CookiesAnalyzer:
     cookiesEvaluated = set()
@@ -25,11 +30,19 @@ class CookiesAnalyzer:
                 log.warning(f"Cookie {cookieName}: No HttpOnly attribute found. This cookie can be retrieved via JavaScript!") 
 
             if "secure" not in cookie:
-                logLevel = log.ERROR if isSensitive else log.WARNING
+                logLevel = logging.ERROR if isSensitive else logging.WARNING
                 log.log(logLevel, f"Cookie {cookieName}: No Secure attribute found. This cookie will be sent over unencrypted connections!")
             
             if "samesite=none" in cookie:
                 if "secure" not in cookie:
                     log.warning(f"Cookie {cookieName}: Attribute SameSite is set to None but no Secure attribute set.")
             
-            # check cookie expiry
+            # Checking cookie expiry date
+            if "expires" in cookie or "max-age" in cookie:
+                expiresDate = re.search("(?<=expires=).*?(?=;)", cookieHeader)
+                if expiresDate is not None:
+                    dt = parser.parse(expiresDate.group(0))
+                    now = datetime.now(timezone.utc)
+
+                    if dt > now + timedelta(days=30):
+                        Helpers.vulnerabilityFound(f"Cookie {cookieName}'s expiry date is more than 30 days in the future ({dt - now})")
