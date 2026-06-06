@@ -49,7 +49,7 @@ class JWTAnalyzer:
                 if keyword in payload_string:
                     log.warning(f"Potential sensitive data leakage; JWT Payload contains keyword '{keyword}': {json.dumps(unverifiedPayload, indent=4)}")
                 if keyword == "role":
-                    self.attackRoleChangeToAdmin(flow, JWT, "role", "admin", unverifiedPayload["data"][keyword])
+                    self.attackClaimChange(flow, JWT, "role", "admin", unverifiedPayload["data"][keyword])
 
             # change role to admin
             #if hs256, then compute hashes using hashcat
@@ -70,10 +70,32 @@ class JWTAnalyzer:
 
         return
     
+
+
+    # ATTACK: Replay request with algorithm none
     def attackWithAlgNone(self, flow, JWT):
         log.debug("ATTACK: JWT algorithm switched to none")
-        # Replay request with algorithm none
-        JWTwithAlgNone = self.buildJWTWithAlgNone(JWT)
+        JWTwithAlgNone = None
+
+        try:
+            header64, payload64, _ = JWT.split(".")
+            paddedHeader = header64 + "=" * divmod(len(header64), 4)[1]
+            headerJSON = json.loads(base64.urlsafe_b64decode(paddedHeader))
+
+            headerJSON["alg"] = "none"
+
+            newHeaderBytes = json.dumps(headerJSON).encode("utf-8")
+            newHeader64 = base64.urlsafe_b64encode(newHeaderBytes).decode("utf-8").rstrip("=")
+
+            JWTwithAlgNone = f"{newHeader64}.{payload64}."
+
+        except Exception as e:
+            log.exception(f"Failed to change JWT algorithm to none")
+
+        if JWTwithAlgNone == None:
+            log.info("Couldn't carry out JWT 'none' algorithm attack")
+            return
+
         attackFlow = flow.copy()
 
         attackFlow.request.headers["X-Fuzzer"] = "Active-Attack-AlgNone"
@@ -83,39 +105,14 @@ class JWTAnalyzer:
         log.info(f"status_code {flow.response.status_code}")
         ctx.master.commands.call("replay.client", [attackFlow])
 
-    def attackRoleChangeToAdmin(self, flow, JWT, claimToChange, newClaimValue, previousValue):
+
+
+    def attackClaimChange(self, flow, JWT, claimToChange, newClaimValue, previousValue):
         log.debug(f"ATTACK: JWT claim {claimToChange} switched to {newClaimValue} from {previousValue}")
-        JWTWithClaimChanged = self.changeJWTPayloadClaim(JWT, claimToChange, newClaimValue)
-        
-        attackFlow = flow.copy()
+        JWTWithClaimChanged = None
 
-        attackFlow.request.headers["X-Fuzzer"] = "Active-Attack-RoleClaim"
-        attackFlow.request.headers["Authorization"] = f"Bearer {JWTWithClaimChanged}"
-
-        attackFlow.metadata["originalStatus"] = flow.response.status_code
-        log.info(f"status_code {flow.response.status_code}")
-        ctx.master.commands.call("replay.client", [attackFlow])
-
-
-    def buildJWTWithAlgNone(self, orgJWT: str) -> str:
         try:
-            header64, payload64, _ = orgJWT.split(".")
-            paddedHeader = header64 + "=" * divmod(len(header64), 4)[1]
-            headerJSON = json.loads(base64.urlsafe_b64decode(paddedHeader))
-
-            headerJSON["alg"] = "none"
-
-            newHeaderBytes = json.dumps(headerJSON).encode("utf-8")
-            newHeader64 = base64.urlsafe_b64encode(newHeaderBytes).decode("utf-8").rstrip("=")
-
-            return f"{newHeader64}.{payload64}."
-
-        except Exception as e:
-            log.exception(f"Failed to change JWT algorithm to none")
-
-    def changeJWTPayloadClaim(self, orgJWT: str, claimToChange, newClaimValue) -> str:
-        try:
-            header64, payload64, signature64 = orgJWT.split(".")
+            header64, payload64, signature64 = JWT.split(".")
             paddedPayload = payload64 + "=" * divmod(len(payload64), 4)[1]
             payloadJSON = json.loads(base64.urlsafe_b64decode(paddedPayload))
 
@@ -124,11 +121,26 @@ class JWTAnalyzer:
             newPayloadBytes = json.dumps(payloadJSON).encode("utf-8")
             newPayload64 = base64.urlsafe_b64encode(newPayloadBytes).decode("utf-8").rstrip("=")
 
-            return f"{header64}.{newPayload64}.{signature64}"
+            JWTWithClaimChanged = f"{header64}.{newPayload64}.{signature64}"
 
         except Exception as e:
             log.exception(f"Failed to change claim {claimToChange} to {newClaimValue}")
-    
+        
+        if JWTWithClaimChanged == None:
+            log.info("Couldn't carry out JWT role change attack")
+            return
+
+        attackFlow = flow.copy()
+
+        attackFlow.request.headers["X-Fuzzer"] = "Active-Attack-Claim"
+        attackFlow.request.headers["Authorization"] = f"Bearer {JWTWithClaimChanged}"
+
+        attackFlow.metadata["originalStatus"] = flow.response.status_code
+        log.info(f"status_code {flow.response.status_code}")
+        ctx.master.commands.call("replay.client", [attackFlow])
+
+
+
     def evaluateAttackResponse(self, attackFlow: http.HTTPFlow, attackHeader):
         log.debug("Evaluating attack response")
         originalStatus = attackFlow.metadata.get("originalStatus")
@@ -142,7 +154,7 @@ class JWTAnalyzer:
             match attackHeader:
                 case "Active-Attack-AlgNone":
                     message = "rejected 'alg: none' signature bypass"
-                case "Active-Attack-RoleClaim":
+                case "Active-Attack-Claim":
                     message = "rejected claim change"
                     
             log.info(f"[✓] Secure: Server successfully {message} on {path} ({attackStatus})")
@@ -150,7 +162,7 @@ class JWTAnalyzer:
             match attackHeader:
                 case "Active-Attack-AlgNone":
                     message = "'alg: none' signature accepted"
-                case "Active-Attack-RoleClaim":
+                case "Active-Attack-Claim":
                     message = "role claim change accepted"
 
             log.critical(f"[⚠️] VULNERABILITY FOUND: {message} on {path} ({attackStatus})")
