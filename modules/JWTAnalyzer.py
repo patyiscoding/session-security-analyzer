@@ -1,21 +1,21 @@
 import base64
-from log import log
+from project.helpers.log import log
 import jwt
 import json
 from mitmproxy import http, ctx
-from helpers import Helpers
+from project.helpers.helpers import Helpers
 import copy
 
 class JWTAnalyzer:
     def __init__(self):
         self.fuzzedJWTs = set()
 
-    def evaluateJWT(self, JWT, flow):
+    def evaluateJWT(JWT, flow):
         if "Active-Attack" in flow.request.headers.get("X-Fuzzer", ""):
-            self.evaluateAttackResponse(flow, flow.request.headers.get("X-Fuzzer"))
+            JWTAnalyzer.evaluateAttackResponse(flow, flow.request.headers.get("X-Fuzzer"))
             return
 
-        if JWT in self.fuzzedJWTs:
+        if JWT in JWTAnalyzer.fuzzedJWTs:
             return
         
         if len(JWT.split(".")) != 3:
@@ -23,7 +23,7 @@ class JWTAnalyzer:
 
 
         log.info(f"JWT extracted for path {flow.request.url}: {JWT}. Evaluating...")
-        self.fuzzedJWTs.add(JWT)
+        JWTAnalyzer.fuzzedJWTs.add(JWT)
 
         try:
             unverifiedHeader = jwt.get_unverified_header(JWT)
@@ -69,7 +69,7 @@ class JWTAnalyzer:
 
             #lack of signature verification
             
-            self.attackWithAlgNone(flow, JWT)
+            JWTAnalyzer.attackWithAlgNone(flow, JWT)
 
         except Exception as e:
             log.exception(e)
@@ -80,7 +80,7 @@ class JWTAnalyzer:
 
 
     # ATTACK: Replay request with algorithm none
-    def attackWithAlgNone(self, flow, JWT):
+    def attackWithAlgNone(flow, JWT):
         log.debug("ATTACK: JWT algorithm switched to none")
         JWTwithAlgNone = None
 
@@ -109,11 +109,11 @@ class JWTAnalyzer:
         attackFlow.request.headers["Authorization"] = f"Bearer {JWTwithAlgNone}"
 
         attackFlow.metadata["originalStatus"] = flow.response.status_code
-        log.info(f"status_code {flow.response.status_code}")
+        log.debug(f"status_code {flow.response.status_code}")
         ctx.master.commands.call("replay.client", [attackFlow])
 
 
-    def attackClaimChange(self, flow, JWT, claimToChange, newClaimValue, previousValue):
+    def attackClaimChange(flow, JWT, claimToChange, newClaimValue, previousValue):
         log.debug(f"ATTACK: JWT claim {claimToChange} switched to {newClaimValue} from {previousValue}")
         JWTWithClaimChanged = None
 
@@ -146,7 +146,7 @@ class JWTAnalyzer:
         ctx.master.commands.call("replay.client", [attackFlow])
 
 
-    def evaluateAttackResponse(self, attackFlow: http.HTTPFlow, attackHeader):
+    def evaluateAttackResponse(attackFlow: http.HTTPFlow, attackHeader):
         log.debug("Evaluating attack response")
         originalStatus = attackFlow.metadata.get("originalStatus")
         log.debug(f"Original HTTP status: {originalStatus}")

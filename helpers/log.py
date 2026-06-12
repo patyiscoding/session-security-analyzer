@@ -2,8 +2,20 @@
 # Posted by Sergey Pleshakov, modified by community. See post 'Timeline' for change history
 # Retrieved 2026-06-06, License - CC BY-SA 4.0
 # Modified
-
 import logging
+
+METADATA = 5
+
+logging.addLevelName(METADATA, "METADATA")
+
+def metadata(self, message, *args, **kwargs):
+    if self.isEnabledFor(METADATA):
+        self._log(METADATA, message, args, **kwargs)
+
+logging.Logger.metadata = metadata
+logging.METADATA = METADATA
+
+
 class CustomFormatter(logging.Formatter):
 
     grey = "\x1b[38;20m"
@@ -16,6 +28,7 @@ class CustomFormatter(logging.Formatter):
     format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
 
     FORMATS = {
+        logging.METADATA: grey + format + reset,
         logging.DEBUG: blue + format + reset,
         logging.INFO: purple + format + reset,
         logging.WARNING: yellow + format + reset,
@@ -30,13 +43,13 @@ class CustomFormatter(logging.Formatter):
 
 
 log = logging.getLogger("")
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.METADATA)
 log.propagate = False
 
 log.handlers.clear()
 
 ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
+ch.setLevel(logging.METADATA)
 ch.setFormatter(CustomFormatter())
 log.addHandler(ch)
 
