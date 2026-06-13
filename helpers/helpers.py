@@ -1,4 +1,4 @@
-from project.helpers.log import log
+from helpers.log import log
 
 class Helpers():
     def vulnerabilityFound(message):

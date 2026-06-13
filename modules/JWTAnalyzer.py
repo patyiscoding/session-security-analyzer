@@ -1,9 +1,9 @@
 import base64
-from project.helpers.log import log
+from helpers.log import log
 import jwt
 import json
 from mitmproxy import http, ctx
-from project.helpers.helpers import Helpers
+from helpers.helpers import Helpers
 import copy
 
 class JWTAnalyzer:

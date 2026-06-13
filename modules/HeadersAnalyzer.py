@@ -1,4 +1,4 @@
-from project.helpers.log import log
+from helpers.log import log
 import re
 
 class HeaderAnalyzer:
@@ -6,7 +6,7 @@ class HeaderAnalyzer:
     #         self.fuzzedJWTs = set()
 
   
-    def analyzeHeaders(headers, path, flow):
+    def analyzeHeaders(flow, headers, path):
         HeaderAnalyzer.analyzeSTS(headers, path)
         HeaderAnalyzer.analyzeNoSniff(headers, path)
         HeaderAnalyzer.analyzeCORS(headers, flow)

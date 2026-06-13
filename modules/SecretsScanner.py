@@ -1,9 +1,9 @@
 # import whispers
 import yaml
 import logging
-from project.helpers.log import log
+from helpers.log import log
 import re
-from project.helpers.helpers import Helpers
+from helpers.helpers import Helpers
 import tempfile
 import subprocess
 import json

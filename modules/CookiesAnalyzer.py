@@ -1,9 +1,9 @@
-from project.helpers.log import log
+from helpers.log import log
 import logging
 import re
 from dateutil import parser
 from datetime import datetime, timedelta, timezone
-from project.helpers.helpers import Helpers
+from helpers.helpers import Helpers
 
 class CookiesAnalyzer:
     cookiesEvaluated = set()
