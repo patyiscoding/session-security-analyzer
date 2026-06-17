@@ -5,9 +5,10 @@ from bs4 import BeautifulSoup
 
 class WebStorageAnalyzer:
     webStorageEndpoint = "webStorageDump"
+    lastWebStorageDump = None
 
     def analyzeWebStorage(flow):
-
+        log.debug("EVALUATING WEB STORAGE")
         if flow.response and "text/html" in flow.response.headers.get("Content-Type", ""):
 
             HTML = flow.response.text
@@ -71,4 +72,4 @@ class WebStorageAnalyzer:
                 flow.response.set_text(modified)
                 log.info(f"Injected web storage script at path {flow.request.path}")
             else:
-                log.info(f"Failed to inject web storage script at path {{flow.request.path}}. No <head> tag.")
+                log.info(f"Failed to inject web storage script at path {flow.request.path}. No <head> tag.")

