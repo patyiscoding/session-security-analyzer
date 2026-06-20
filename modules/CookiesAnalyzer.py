@@ -8,7 +8,7 @@ from helpers.helpers import Helpers
 class CookiesAnalyzer:
     cookiesEvaluated = set()
 
-    def evaluateSETCOOKIES(flow) -> None:
+    def evaluateSetCookies(flow) -> None:
         log.debug("EVALUATING SETCOOKIE")
         SETCOOKIES = flow.response.headers.get_all("Set-Cookie")
         if len(SETCOOKIES) == 0:
@@ -32,16 +32,18 @@ class CookiesAnalyzer:
 
             # HttpOnly, Secure, SameSite
             if "httponly" not in cookie:
-                Helpers.logWarning(f"Cookie {cookieName}: No HttpOnly attribute found. This cookie can be retrieved via JavaScript!", flow.request.url)
+                Helpers.logWarning(flow, f"Cookie {cookieName}: No HttpOnly attribute found. This cookie can be retrieved via JavaScript!", flow.request.url)
                
 
             if "secure" not in cookie:
-                logLevel = 50 if isSensitive else 30
-                log.log(logLevel, f"Cookie {cookieName}: No Secure attribute found. This cookie will be sent over unencrypted connections!", flow.request.url)
+                if isSensitive:
+                    Helpers.logVulnerability(flow, f"Cookie {cookieName}: No Secure attribute found. This cookie will be sent over unencrypted connections!", flow.request.url)
+                else:
+                    Helpers.logWarning(flow, f"Cookie {cookieName}: No Secure attribute found. This cookie will be sent over unencrypted connections!", flow.request.url)
             
             if "samesite=none" in cookie:
                 if "secure" not in cookie:
-                    Helpers.logWarning(f"Cookie {cookieName}: Attribute SameSite is set to None but no Secure attribute set.", flow.request.url)
+                    Helpers.logWarning(flow, f"Cookie {cookieName}: Attribute SameSite is set to None but no Secure attribute set.", flow.request.url)
             
             # Checking cookie expiry date
             if "expires" in cookie or "max-age" in cookie:
@@ -51,4 +53,4 @@ class CookiesAnalyzer:
                     now = datetime.now(timezone.utc)
 
                     if dt > now + timedelta(days=30):
-                        Helpers.logVulnerability(f"Cookie {cookieName}'s expiry date is more than 30 days in the future ({dt - now})", flow.request.url)
+                        Helpers.logWarning(flow, f"Cookie {cookieName}'s expiry date is more than 30 days in the future ({dt - now})", flow.request.url)

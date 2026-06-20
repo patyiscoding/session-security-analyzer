@@ -1,48 +1,64 @@
 from mitmproxy import http
-import re
-
-from modules.JWTAnalyzer import JWTAnalyzer
-from helpers.log import log
 from modules.CookiesAnalyzer import CookiesAnalyzer
+from helpers.log import log
 from helpers.helpers import Helpers
 from modules.SecretsScanner import SecretsScanner
 from modules.HeadersAnalyzer import HeadersAnalyzer
 from modules.WebStorageAnalyzer import WebStorageAnalyzer
+from modules.JWTAnalyzer import JWTAnalyzer
 import json
 from collections import defaultdict
 from dashboardServer import startDashboardServer, telemetryQueue
 from multiprocessing import Process, Queue, current_process
 from mitmproxy.addonmanager import Loader
+import signal
+import os
+import threading
+import time
 
 SERVERSTARTED = False
-
-def trie():
-    return defaultdict(trie)
-
+_analyzer_instance = None
 
 class SessionAnalyzer:
+    activeGitLeaksProcesses = set()
+    activeTasks = set()
+    vulnerabilityScanResultsJSON = {
+        "metadata": {},
+        "data": {}
+    }
+
     def __init__(self):
         self.vulnerabilityServerProcess = None
-        self.activeGitLeaksProcesses = set()
-        self.vulnerabilityScanResultsJSON = trie()
+        
 
     def load(self, loader: Loader):
-        global SERVERSTARTED
+        global SERVERSTARTED, _analyzer_instance
+        _analyzer_instance = self
 
         if current_process().name == 'MainProcess' and not SERVERSTARTED:
-            print("TWICE?")
             self.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(telemetryQueue,))
             self.vulnerabilityServerProcess.start()
             SERVERSTARTED = True
             print("Vulnerability Dashboard Server started on http://localhost:9999")
 
+                
+        # Set up signal handler for graceful shutdown
+        try:
+            def signal_handler(signum, frame):
+                log.info("Received interrupt signal, shutting down...")
+                if _analyzer_instance:
+                    _analyzer_instance.done()
+            
+            signal.signal(signal.SIGINT, signal_handler)
+        except Exception as e:
+            log.warning(f"Failed to set up signal handler: {e}")
     
 
     def request(self, flow: http.HTTPFlow):
-        # if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
-        #     return
+        if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
+            return
 
-        if WebStorageAnalyzer.webStorageEndpoint in flow.request.path:
+        if WebStorageAnalyzer.webStorageEndpoint in flow.request.url:
             if flow.request.method == "OPTIONS":
                 flow.response = http.Response.make(
                     204,
@@ -100,42 +116,66 @@ class SessionAnalyzer:
 
     
     def response(self, flow: http.HTTPFlow):
-        # if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
-        #     return
+        if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
+            return
 
-        print("") # for newline before each new request/response log
-        log.metadata(f"[{flow.request.method}] ({flow.response.status_code}) {flow.request.url} {flow.response.headers.get("Content-Type", "")}")
+        Helpers.printResponse(flow)
 
-        CookiesAnalyzer.evaluateSETCOOKIES(flow)
+        CookiesAnalyzer.evaluateSetCookies(flow)
         HeadersAnalyzer.analyzeHeaders(flow)
         WebStorageAnalyzer.analyzeWebStorage(flow)
         SecretsScanner.lookForSecrets(flow)
-
-        # ---------------------------------JWT ANALYSIS----------------------------------------
-        # From Authorization header
-        AUTHORIZATION = flow.request.headers.get("Authorization", "")
-        if AUTHORIZATION.startswith("Bearer "):
-            log.debug("Evaluating JWT from the Authorization header")
-            JWTAnalyzer.evaluateJWT(AUTHORIZATION.split(" ")[1], flow)
-
-        # From Cookie header
-        matches = re.findall("token=((?:[a-zA-Z0-9_-]+\\.){2}[a-zA-Z0-9_-]+)", flow.request.headers.get("Cookie", ""))
-        if len(matches) != 0 and matches[0] is not None:
-            log.debug("Evaluating JWT from the Cookie header")
-            JWTAnalyzer.evaluateJWT(matches[0], flow)
+        JWTAnalyzer.lookForJWTS(flow)
+       
+        
 
     def done(self):
-        if current_process().name == 'MainProcess' and self.server_process:
-            self.server_process.terminate()
-            self.server_process.join()
+        def force_exit_timeout():
+            time.sleep(5)
+            log.warning("Force exiting")
+            os._exit(1)
+        
+        failsafe_thread = threading.Thread(target=force_exit_timeout, daemon=True)
+        failsafe_thread.start()
+        
+        for task in list(SessionAnalyzer.activeTasks):
+            if not task.done():
+                log.debug(f"Cancelling task: {task}")
+                task.cancel()
+        
+        if current_process().name == 'MainProcess' and self.vulnerabilityServerProcess:
+            log.debug("Terminating dashboard server process")
+            self.vulnerabilityServerProcess.terminate()
+            try:
+                self.vulnerabilityServerProcess.join(timeout=1)
+            except Exception as e:
+                log.error(f"Error joining server process: {e}")
 
-        if self.activeGitLeaksProcesses:
-            for process in list(self.activeGitLeaksProcesses):
-                if process.returncode is None:  # if still running
-                    try:
-                        process.terminate()
-                    except ProcessLookupError:
-                        pass
+        # Kill all active GitLeaks asyncio subprocesses
+        if SessionAnalyzer.activeGitLeaksProcesses:
+            log.debug("Killing GitLeaks processes")
+            for process in list(SessionAnalyzer.activeGitLeaksProcesses):
+                try:
+                    if process.returncode is None:
+                        process.kill()
+                except Exception as e:
+                    log.debug(f"Error killing gitleaks process: {e}")
+        
+        # Kill all active Hashcat subprocesses
+        for hashcat_entry in JWTAnalyzer.runningHashcats:
+            if hashcat_entry["isRunning"] == 1:
+                process = hashcat_entry["process"]
+                try:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=1)
+                except Exception as e:
+                    log.debug(f"Error killing hashcat process: {e}")
+        
+        log.info("Shutdown complete, force exiting")
+        # Use os._exit to forcefully terminate without cleanup
+        # This bypasses any pending asyncio operations
+        os._exit(0)
 
 
 

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Session Security Telemetry</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 p-8">
+
+    <header class="border-b border-slate-700 pb-4 mb-6">
+        <h1 class="text-3xl font-bold text-emerald-400">⚡ Live Session Security Dashboard</h1>
+        <p class="text-slate-400 text-sm">Monitoring mitmproxy active assessment pipelines...</p>
+    </header>
+
+    <main class="grid grid-cols-1 gap-4" id="alert-container">
+        <div class="bg-slate-800 p-4 rounded border border-slate-700 text-slate-400 text-center" id="empty-state">
+            Awaiting interception pipeline telemetry...
+        </div>
+    </main>
+
+    <script>
+        // Connect directly to the FastAPI Server-Sent Events loop
+        const eventSource = new EventSource("http://localhost:9999/vulnerabilityStream");
+
+        eventSource.addEventListener("vulnerability", function(event) {
+            // Hide the empty state message on the first incoming alert
+            const emptyState = document.getElementById("empty-state");
+            if (emptyState) emptyState.remove();
+
+            // Parse the serialized JSON chunk sent from your analyzer modules
+            // const alertData = JSON.parse(event.data);
+
+            // Generate a clean HTML notification component on the fly
+            const alertCard = document.createElement("div");
+            alertCard.className = "bg-slate-800 p-5 rounded-lg border-l-4 border-red-500 shadow-md animate-pulse flex justify-between items-center";
+            
+            alertCard.innerHTML = `
+                ${event.data}
+            `
+
+            // alertCard.innerHTML = `
+            //     <div>
+            //         <span class="text-xs font-mono uppercase bg-red-900/50 text-red-400 px-2 py-1 rounded border border-red-700">${alertData.severity}</span>
+            //         <h3 class="text-lg font-bold mt-2">${alertData.vulnerability}</h3>
+            //         <p class="text-sm text-slate-400 font-mono">Engine: ${alertData.module}</p>
+            //     </div>
+            //     <div class="text-xs text-slate-500">${new Date().toLocaleTimeString()}</div>
+            // `;
+
+            // Append the alert to the top of the dashboard feed
+            const container = document.getElementById("alert-container");
+            container.insertBefore(alertCard, container.firstChild);
+        });
+
+        eventSource.onerror = function(err) {
+            console.error("EventSource failed:", err);
+        };
+    </script>
+</body>
+</html>

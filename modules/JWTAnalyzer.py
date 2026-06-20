@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 import os
 import time
+import re
 import threading
 
 class JWTAnalyzer:
@@ -22,9 +23,32 @@ class JWTAnalyzer:
 
     runningHashcats = []
 
+    def lookForJWTS(flow: http.HTTPFlow):
+         # From Authorization header
+        AUTHORIZATION = flow.request.headers.get("Authorization", "")
+        if AUTHORIZATION.startswith("Bearer "):
+            log.debug("Evaluating JWT from the Authorization header")
+            JWTAnalyzer.evaluateJWT(AUTHORIZATION.split(" ")[1], flow)
+
+        # From Cookie header
+        matches = re.findall("token=((?:[a-zA-Z0-9_-]+\\.){2}[a-zA-Z0-9_-]+)", flow.request.headers.get("Cookie", ""))
+        if len(matches) != 0 and matches[0] is not None:
+            log.debug("Evaluating JWT from the Cookie header")
+            for match in matches:
+                JWTAnalyzer.evaluateJWT(match, flow)
+
+        # From URL
+        matches = re.findall("token=((?:[a-zA-Z0-9_-]+\\.){2}[a-zA-Z0-9_-]+)", flow.request.url)
+        matches.extend(re.findall("jwt=((?:[a-zA-Z0-9_-]+\\.){2}[a-zA-Z0-9_-]+)", flow.request.url))
+
+        if len(matches) != 0 and matches[0] is not None:
+            log.debug("Evaluating JWT from the URL")
+            for match in matches:
+                Helpers.logVulnerability(flow, f"JWT found in URL: {match}", flow.request.url)
+                JWTAnalyzer.evaluateJWT(match, flow)
+
 
     def evaluateJWT(JWT, flow):
-        log.debug("EVALUATING JWTS")
         if "Active-Attack" in flow.request.headers.get("X-Fuzzer", ""):
             JWTAnalyzer.evaluateAttackResponse(flow, flow.request.headers.get("X-Fuzzer"))
             return
@@ -54,7 +78,7 @@ class JWTAnalyzer:
             # Symmetric algorithms (like HS256) are prone to brute-forcing if secrets are weak.
             # Asymmetric (like RS256) is safer. If HS256 is used, flag it for manual review.
             if alg == "hs256":
-                Helpers.logWarning(f"JWT uses symmetric HS256. Risk of secret brute-forcing.", flow.request.url)
+                Helpers.logWarning(flow, f"JWT uses symmetric HS256. Risk of secret brute-forcing.", flow.request.url)
 
             # --- TEST 3: Sensitive Information Leakage in Payload ---
             # JWT payloads are NOT encrypted; they are only base64 encoded. anyone can read them.
@@ -79,7 +103,7 @@ class JWTAnalyzer:
             # --- TEST 4: Missing Expiration (No 'exp' claim) ---
             # If a token never expires, a stolen token is valid forever.
             if "exp" not in unverifiedPayload:
-                Helpers.logWarning(f"JWT is missing an expiration timestamp ('exp' claim)", flow.response.path)
+                Helpers.logWarning(flow, f"JWT is missing an expiration timestamp ('exp' claim)", flow.request.url)
 
             #lack of signature verification
             

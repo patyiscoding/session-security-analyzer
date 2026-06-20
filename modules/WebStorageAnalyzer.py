@@ -70,6 +70,6 @@ class WebStorageAnalyzer:
             if "<head>" in HTML:
                 modified = HTML.replace("<head>", f"<head>\n{JSPayload}", 1)
                 flow.response.set_text(modified)
-                log.info(f"Injected web storage script at path {flow.request.path}")
+                log.info(f"Injected web storage script at path {flow.request.url}")
             else:
-                log.info(f"Failed to inject web storage script at path {flow.request.path}. No <head> tag.")
+                log.info(f"Failed to inject web storage script at path {flow.request.url}. No <head> tag.")

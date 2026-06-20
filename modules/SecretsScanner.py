@@ -33,16 +33,21 @@ class SecretsScanner():
             if not (("text/html" in ct or "application/json" in ct or "text/plain" in ct or "text/javascript") and len(text) > 0):
                 return
             
-        if not content:
-            log.debug("Contents empty")
+        if not text:
+            log.debug("Contents for secrets scanning are empty")
             return
 
-        SecretsScanner.lookForSecretsWithRegexes(text, flow)
-        asyncio.create_task((SecretsScanner.lookForSecretsWithGitLeaks(text)))
+        SecretsScanner.lookForSecretsWithRegexes(flow, text)
         
+        try:
+            task = asyncio.create_task(SecretsScanner.lookForSecretsWithGitLeaks(flow, text))
+            from SessionAnalyzer import SessionAnalyzer
+            SessionAnalyzer.activeTasks.add(task)
+            task.add_done_callback(lambda t: SessionAnalyzer.activeTasks.discard(t))
+        except RuntimeError as e:
+            log.error(f"Failed to create GitLeaks task: {e}")
         
-        
-    def lookForSecretsWithRegexes(text, flow):
+    def lookForSecretsWithRegexes(flow, text):
         log.debug("Starting regex secrets scan")
         matches = []
 
@@ -57,19 +62,15 @@ class SecretsScanner():
                 if len(match) > 500:
                     log.info("Skipping match found by SecretsScanner; length too big")
                     continue
-                Helpers.logVulnerability(f"Found potentially sensitive string: {match}", flow.request.url)
+                Helpers.logVulnerability(flow, f"Found potentially sensitive string: {match}", flow.request.url)
 
 
-    async def lookForSecretsWithGitLeaks(text):
+    async def lookForSecretsWithGitLeaks(flow, text):
+        process = None
         try:
             log.debug("Starting GitLeaks secrets scan")
             log.debug(f"Text to analyze: {text}")
 
-            # with tempfile.NamedTemporaryFile(mode="w", encoding='utf-8', delete=False) as f:
-            #     f.write(text)
-            #     path = f.name
-
-          
             process = await asyncio.create_subprocess_exec(
                 "./third-party/gitleaks.exe", "stdin", "-f", "json",
                 stdin=asyncio.subprocess.PIPE,
@@ -79,23 +80,37 @@ class SecretsScanner():
 
             from SessionAnalyzer import SessionAnalyzer
             SessionAnalyzer.activeGitLeaksProcesses.add(process)
-            print("ACTIVE", SessionAnalyzer.activeGitLeaksProcesses)
+            print("Active GitLeaks processes:", SessionAnalyzer.activeGitLeaksProcesses)
 
-            stdout, stderr = await process.communicate(input=text.encode('utf-8'))
+            # Add timeout to prevent hanging indefinitely
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(input=text.encode('utf-8')),
+                    timeout=10.0
+                )
+            except asyncio.TimeoutError:
+                log.warning("GitLeaks scan timed out after 10 seconds")
+                process.kill()
+                await process.wait()
+                return
 
             if stdout.strip():
                 if len(stdout) > 500:
                         log.info("Skipping match found by SecretsScanner; length too big")
                         return
-                Helpers.vulnerabilityFound(f"(GitLeaks) Found potentially sensitive string: {json.loads(stdout)}")
+                Helpers.logVulnerability(flow, f"(GitLeaks) Found potentially sensitive string: {json.loads(stdout)}")
         except asyncio.CancelledError:
+            log.debug("GitLeaks scan cancelled")
             if process and process.returncode is None:
                 try:
-                    process.terminate()
-                except ProcessLookupError:
+                    process.kill()
+                    await process.wait()
+                except OSError:
                     pass
         except Exception as e:
-            log.error(e)
+            log.error(f"GitLeaks scan error: {e}")
         finally:
-            if process in SessionAnalyzer.activeGitLeaksProcesses:
-                SessionAnalyzer.activeGitLeaksProcesses.remove(process)
+            if process:
+                from SessionAnalyzer import SessionAnalyzer
+                if process in SessionAnalyzer.activeGitLeaksProcesses:
+                    SessionAnalyzer.activeGitLeaksProcesses.remove(process)

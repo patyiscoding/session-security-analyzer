@@ -1,31 +1,38 @@
-from collections.abc import AsyncIterable, Iterable
+import uuid
 import asyncio
 import uvicorn
 from multiprocessing import Process, Queue
 from fastapi import FastAPI, Request
-from fastapi.sse import EventSourceResponse
+from collections.abc import AsyncIterable, Iterable
+from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
-import json
 
 telemetryQueue = Queue()
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/vulnerabilityStream") # SSE endpoint
 async def vulnerabilityStream(request: Request):
     async def eventGenerator():
+        print("Client connected")  
         while True:
             if await request.is_disconnected():
+                print("Client disconnected")  #
                 break
 
             if not telemetryQueue.empty():
-                data = telemetryQueue.get()
-                yield {
-                    "data": data
-                }
-
-            await asyncio.sleep(0.2)
+                try:
+                    data = await asyncio.to_thread(telemetryQueue, True, 0.15)
+                    
+                    yield {
+                        "id": str(uuid.uuid4()),
+                        "event": "vulnerability",
+                        "retry": 1500,
+                        "data": data
+                    }
+                except Exception:
+                    pass
 
     return EventSourceResponse(eventGenerator())
 
