@@ -3,16 +3,16 @@ import asyncio
 import uvicorn
 import json
 from queue import Empty
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from multiprocessing import Queue
 from urllib.parse import urlparse, urlunparse
 from fastapi.responses import JSONResponse, Response
-from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 telemetryQueue = Queue()
 lastSentState = {}
 CHUNKSIZE = 10
+connectedClients = set() 
 
 def normalize_url(url_string: str) -> str:
     """Normalize URL by removing query parameters and fragments.
@@ -69,19 +69,18 @@ async def health():
     """Health check endpoint"""
     return JSONResponse({"status": "ok"})
 
-@app.get("/vulnerabilityStream") # SSE
-async def vulnerabilityStream(request: Request):
+@app.websocket("/vulnerabilityStream")
+async def websocket_vulnerabilityStream(websocket: WebSocket):
     global lastSentState
     
-    async def eventGenerator():
-        print("Client connected")  
-        lastSentState = {}  # Reset state for each new connection
+    await websocket.accept()
+    connectedClients.add(websocket)
+    print(f"Client connected via WebSocket. Total clients: {len(connectedClients)}")
+    
+    try:
+        clientState = {}
         
         while True:
-            if await request.is_disconnected():
-                print("Client disconnected")
-                break
-
             try:
                 # Non-blocking get with timeout
                 data = await asyncio.to_thread(telemetryQueue.get, block=True, timeout=0.5)
@@ -94,57 +93,55 @@ async def vulnerabilityStream(request: Request):
                 else:
                     rawState = data
                 
-             
+                # Deduplicate URLs
                 currentState = deduplicateVulnerabilities(rawState)
                 
-                # Calculate delta: what's new or changed
-                allKeys = set(currentState.keys()) | set(lastSentState.keys())
+                # Calculate delta for this client
+                allKeys = set(currentState.keys()) | set(clientState.keys())
                 delta = {}
                 
                 for key in allKeys:
-                    if key not in lastSentState or currentState.get(key) != lastSentState.get(key):
+                    if key not in clientState or currentState.get(key) != clientState.get(key):
                         if key in currentState:
                             delta[key] = currentState[key]
                 
                 if not delta:
-                    # No changes, just update metadata if present
+                    # No changes
                     await asyncio.sleep(0.1)
                     continue
                 
                 # Split delta into chunks and send
                 deltaKeys = list(delta.keys())
-                eventType = "full" if not lastSentState else "delta"
+                eventType = "full" if not clientState else "delta"
                 
                 for i in range(0, len(deltaKeys), CHUNKSIZE):
                     chunk = {k: delta[k] for k in deltaKeys[i:i+CHUNKSIZE]}
                     
-                    event_data = {
+                    message = {
                         "type": eventType,
                         "data": chunk,
                         "metadata": {"vulnerabilities": len(currentState), "warnings": 0}
                     }
                     
-                    print(f"Sending {eventType} event with {len(chunk)} entries")
-                    yield {
-                        "id": str(uuid.uuid4()),
-                        "event": "vulnerability",
-                        "retry": 1500,
-                        "data": json.dumps(event_data)
-                    }
+                    print(f"Sending {eventType} message with {len(chunk)} entries")
+                    await websocket.send_json(message)
                 
-                # Update state tracking
-                lastSentState = currentState.copy()
+                # Update client state
+                clientState = currentState.copy()
                 
             except Empty:
-                # Queue is empty (timeout), continue waiting
+                # Queue is empty, continue waiting
                 await asyncio.sleep(0.1)
             except Exception as e:
-                import traceback
-                print(f"Error in eventGenerator: {type(e).__name__}: {str(e)}")
-                traceback.print_exc()
+                print(f"Error in WebSocket loop: {type(e).__name__}: {str(e)}")
                 await asyncio.sleep(0.1)
-
-    return EventSourceResponse(eventGenerator())
+    
+    except WebSocketDisconnect:
+        print("Client disconnected via WebSocket")
+        connectedClients.discard(websocket)
+    except Exception as e:
+        print(f"WebSocket error: {type(e).__name__}: {str(e)}")
+        connectedClients.discard(websocket)
 
 
 def startDashboardServer(queueInstance):
