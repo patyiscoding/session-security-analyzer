@@ -5,10 +5,6 @@ from helpers.helpers import Helpers
 
 
 class HeadersAnalyzer:
-    # def __init__(self):
-    #         self.fuzzedJWTs = set()
-
-  
     def analyzeHeaders(flow):
         log.debug("EVALUATING HEADERS")
         headers = flow.response.headers
@@ -22,7 +18,7 @@ class HeadersAnalyzer:
         STS = headers.get("Strict-Transport-Security", "")
         
         if STS == "":
-            Helpers.logWarning(flow, f"Missing Strict-Transport-Security header on request {path}", path)
+            Helpers.logWarning(flow, f"Missing Strict-Transport-Security header", path)
         else:
             match = re.search(r"max-age=(\d+)", STS)    
             if match:

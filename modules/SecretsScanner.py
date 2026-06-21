@@ -69,7 +69,6 @@ class SecretsScanner():
         process = None
         try:
             log.debug("Starting GitLeaks secrets scan")
-            log.debug(f"Text to analyze: {text}")
 
             process = await asyncio.create_subprocess_exec(
                 "./third-party/gitleaks.exe", "stdin", "-f", "json",

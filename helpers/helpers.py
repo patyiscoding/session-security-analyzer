@@ -21,7 +21,7 @@ class Helpers():
     def logVulnerability(flow, contents, path):
         Helpers.vulnerabilities += 1
         Helpers.addToResults(flow, contents, path, "Vulnerability")
-        log.critical(f"[⚠️] POTENTIAL VULNERABILITY FOUND: {contents} at path {path}")
+        log.critical(f"POTENTIAL VULNERABILITY FOUND: {contents} at path {path}")
 
 
     def addToResults(flow, contents, url, level):
@@ -39,7 +39,16 @@ class Helpers():
 
 
         for token in parts[1:-1]:
-            currentNode = currentNode.setdefault(token, {})
+            if token not in currentNode:
+                currentNode[token] = {}
+            
+            # If the token points to a list (a leaf node), we can't traverse further
+            # Create a new branch by converting it to a dict
+            if isinstance(currentNode[token], list):
+                # This path was previously a leaf, now we need it to be a branch
+                currentNode[token] = {}
+            
+            currentNode = currentNode[token]
 
         lastToken = parts[-1] if len(parts) > 1 else "/" 
 
@@ -52,10 +61,17 @@ class Helpers():
                 'response': flow.response.get_text(strict=False)
             }
         
+        # Ensure currentNode is a dict
+        if not isinstance(currentNode, dict):
+            currentNode = {}
+        
         if currentNode.get(lastToken) is None:
             currentNode[lastToken] = [leaf]
-        else:
+        elif isinstance(currentNode[lastToken], list):
             currentNode[lastToken].append(leaf)
+        else:
+            # If it's not a list, convert it
+            currentNode[lastToken] = [leaf]
         
         telemetryQueue.put(json.dumps(SessionAnalyzer.vulnerabilityScanResultsJSON))
 

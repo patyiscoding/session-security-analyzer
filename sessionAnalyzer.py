@@ -55,8 +55,13 @@ class SessionAnalyzer:
     
 
     def request(self, flow: http.HTTPFlow):
-        if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
+        # if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
+        #     return
+        
+        if ":5173" in flow.request.url or ":8080" in flow.request.url: # if the request is coming from the dashboard frontend, ignore it
             return
+        
+        start = time.perf_counter()
 
         if WebStorageAnalyzer.webStorageEndpoint in flow.request.url:
             if flow.request.method == "OPTIONS":
@@ -96,36 +101,42 @@ class SessionAnalyzer:
                         log.debug("Skipping secrets evaluation")
                         return
 
-
-                    safeswitch = 0
                     for webStorageType in jsonParsed:
-                        safeswitch += 1
                         log.debug(f"EVALUATING {webStorageType}")
                         
                         webStorageDumpItem = json.dumps(dict(jsonParsed[webStorageType].items()))
                         SecretsScanner.lookForSecrets(flow, webStorageDumpItem)
-                        #     if safeswitch > 200:
-                        #         break
-                        # if safeswitch > 200:
-                        #         break
 
                 except Exception as e:
                     log.error(f"Failed to process web storage dump: {e}")
 
-        return
+        elapsed = time.perf_counter() - start
+        if elapsed > 0.05: # slower than 50ms
+            print(f"SLOW REQUEST: {flow.request.method} {flow.request.url}")
+            print(f"Time: {elapsed*1000:.1f}ms")
 
     
     def response(self, flow: http.HTTPFlow):
-        if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
+        # if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
+        #     return
+        
+        if ":5173" in flow.request.url or ":8080" in flow.request.url: # if the response is coming from the dashboard frontend, ignore it
             return
+        
+        start = time.perf_counter()
 
         Helpers.printResponse(flow)
-
+        
         CookiesAnalyzer.evaluateSetCookies(flow)
         HeadersAnalyzer.analyzeHeaders(flow)
         WebStorageAnalyzer.analyzeWebStorage(flow)
         SecretsScanner.lookForSecrets(flow)
         JWTAnalyzer.lookForJWTS(flow)
+
+        elapsed = time.perf_counter() - start
+        if elapsed > 0.05: # slower than 50ms
+            print(f"SLOW RESPONSE: {flow.request.method} {flow.request.url}")
+            print(f"Time: {elapsed * 1000:.1f}ms")
        
         
 
