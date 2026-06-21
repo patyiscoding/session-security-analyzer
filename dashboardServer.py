@@ -1,18 +1,18 @@
-import uuid
 import asyncio
 import uvicorn
 import json
 from queue import Empty
+from helpers.log import log
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from multiprocessing import Queue
 from urllib.parse import urlparse, urlunparse
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-telemetryQueue = Queue()
-lastSentState = {}
 CHUNKSIZE = 10
-connectedClients = set() 
+lastSentState = {}
+connectedClients = set()
+telemetryQueue = Queue()
 
 def normalize_url(url_string: str) -> str:
     """Normalize URL by removing query parameters and fragments.
@@ -70,19 +70,18 @@ async def health():
     return JSONResponse({"status": "ok"})
 
 @app.websocket("/vulnerabilityStream")
-async def websocket_vulnerabilityStream(websocket: WebSocket):
+async def vulnerabilityStream(websocket: WebSocket):
     global lastSentState
     
     await websocket.accept()
     connectedClients.add(websocket)
-    print(f"Client connected via WebSocket. Total clients: {len(connectedClients)}")
+    log.debug(f"Client connected via WebSocket. Total clients: {len(connectedClients)}")
     
     try:
         clientState = {}
         
         while True:
             try:
-                # Non-blocking get with timeout
                 data = await asyncio.to_thread(telemetryQueue.get, block=True, timeout=0.5)
                 
                 # Parse incoming data
@@ -123,7 +122,7 @@ async def websocket_vulnerabilityStream(websocket: WebSocket):
                         "metadata": {"vulnerabilities": len(currentState), "warnings": 0}
                     }
                     
-                    print(f"Sending {eventType} message with {len(chunk)} entries")
+                    log.debug(f"Sending {eventType} message with {len(chunk)} entries")
                     await websocket.send_json(message)
                 
                 # Update client state
@@ -133,14 +132,14 @@ async def websocket_vulnerabilityStream(websocket: WebSocket):
                 # Queue is empty, continue waiting
                 await asyncio.sleep(0.1)
             except Exception as e:
-                print(f"Error in WebSocket loop: {type(e).__name__}: {str(e)}")
+                log.error(f"Error in WebSocket loop: {type(e).__name__}: {str(e)}")
                 await asyncio.sleep(0.1)
     
     except WebSocketDisconnect:
-        print("Client disconnected via WebSocket")
+        log.debug("Client disconnected via WebSocket")
         connectedClients.discard(websocket)
     except Exception as e:
-        print(f"WebSocket error: {type(e).__name__}: {str(e)}")
+        log.error(f"WebSocket error: {type(e).__name__}: {str(e)}")
         connectedClients.discard(websocket)
 
 
