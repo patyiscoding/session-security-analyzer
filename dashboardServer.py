@@ -124,7 +124,14 @@ async def websocket_vulnerabilityStream(websocket: WebSocket):
                     }
                     
                     print(f"Sending {eventType} message with {len(chunk)} entries")
-                    await websocket.send_json(message)
+                    try:
+                        await websocket.send_json(message)
+                    except RuntimeError as e:
+                        # Connection closed, exit the loop
+                        if "close message has been sent" in str(e):
+                            print("WebSocket connection closed, stopping transmission")
+                            break
+                        raise
                 
                 # Update client state
                 clientState = currentState.copy()
@@ -132,6 +139,14 @@ async def websocket_vulnerabilityStream(websocket: WebSocket):
             except Empty:
                 # Queue is empty, continue waiting
                 await asyncio.sleep(0.1)
+            except RuntimeError as e:
+                # Handle connection errors (including "close message has been sent")
+                if "close message has been sent" in str(e) or "closed" in str(e).lower():
+                    print("WebSocket connection closed, exiting loop")
+                    break
+                else:
+                    print(f"RuntimeError in WebSocket loop: {str(e)}")
+                    await asyncio.sleep(0.1)
             except Exception as e:
                 print(f"Error in WebSocket loop: {type(e).__name__}: {str(e)}")
                 await asyncio.sleep(0.1)

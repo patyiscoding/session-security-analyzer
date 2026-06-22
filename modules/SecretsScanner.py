@@ -41,7 +41,7 @@ class SecretsScanner():
         
         try:
             task = asyncio.create_task(SecretsScanner.lookForSecretsWithGitLeaks(flow, text))
-            from SessionAnalyzer import SessionAnalyzer
+            from sessionAnalyzer import SessionAnalyzer
             SessionAnalyzer.activeTasks.add(task)
             task.add_done_callback(lambda t: SessionAnalyzer.activeTasks.discard(t))
         except RuntimeError as e:
@@ -77,7 +77,7 @@ class SecretsScanner():
                 stderr=asyncio.subprocess.PIPE
             )
 
-            from SessionAnalyzer import SessionAnalyzer
+            from sessionAnalyzer import SessionAnalyzer
             SessionAnalyzer.activeGitLeaksProcesses.add(process)
             print("Active GitLeaks processes:", SessionAnalyzer.activeGitLeaksProcesses)
 
@@ -110,6 +110,6 @@ class SecretsScanner():
             log.error(f"GitLeaks scan error: {e}")
         finally:
             if process:
-                from SessionAnalyzer import SessionAnalyzer
+                from sessionAnalyzer import SessionAnalyzer
                 if process in SessionAnalyzer.activeGitLeaksProcesses:
                     SessionAnalyzer.activeGitLeaksProcesses.remove(process)

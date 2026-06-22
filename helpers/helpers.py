@@ -25,6 +25,8 @@ class Helpers():
 
 
     def addToResults(flow, contents, url, level):
+        from sessionAnalyzer import SessionAnalyzer
+        
         parsedURL = urlparse(url)
         host = parsedURL.netloc
 
@@ -32,7 +34,7 @@ class Helpers():
         parts = [p for p in pathElements if p and p != "https:" and p!= "http:"]
         # pathElements = [elem for elem in parsedURL.path.split('/') if elem]
 
-        from SessionAnalyzer import SessionAnalyzer
+        
         currentNode = SessionAnalyzer.vulnerabilityScanResultsJSON["data"].setdefault(parts[0], {})
         SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"] = Helpers.vulnerabilities
         SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"] = Helpers.warnings
