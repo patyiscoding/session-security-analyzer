@@ -3,15 +3,16 @@ import uvicorn
 import json
 from queue import Empty
 from helpers.log import log
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request
 from multiprocessing import Queue
 from urllib.parse import urlparse, urlunparse
 from fastapi.responses import JSONResponse, Response
+from sse_starlette.sse import EventSourceResponse
 from fastapi.middleware.cors import CORSMiddleware
+import uuid
 
-CHUNKSIZE = 10
+CHUNK_SIZE = 500
 lastSentState = {}
-connectedClients = set()
 telemetryQueue = Queue()
 
 # def normalize_url(url_string: str) -> str:
@@ -64,18 +65,20 @@ async def health():
     """Health check endpoint"""
     return JSONResponse({"status": "ok"})
 
-@app.websocket("/vulnerabilityStream")
-async def vulnerabilityStream(websocket: WebSocket):
+@app.get("/vulnerabilityStream")
+async def vulnerabilityStream(request: Request):
+    """SSE endpoint for streaming vulnerabilities"""
     global lastSentState
     
-    await websocket.accept()
-    connectedClients.add(websocket)
-    log.debug(f"Client connected via WebSocket. Total clients: {len(connectedClients)}")
-    
-    try:
+    async def eventGenerator():
+        log.debug("Client connected via SSE")
         clientState = {}
         
         while True:
+            if await request.is_disconnected():
+                log.debug("Client disconnected via SSE")
+                break
+            
             try:
                 data = await asyncio.to_thread(telemetryQueue.get, block=True, timeout=0.5)
                 
@@ -108,8 +111,8 @@ async def vulnerabilityStream(websocket: WebSocket):
                 deltaKeys = list(delta.keys())
                 eventType = "full" if not clientState else "delta"
                 
-                for i in range(0, len(deltaKeys), CHUNKSIZE):
-                    chunk = {k: delta[k] for k in deltaKeys[i:i+CHUNKSIZE]}
+                for i in range(0, len(deltaKeys), CHUNK_SIZE):
+                    chunk = {k: delta[k] for k in deltaKeys[i:i+CHUNK_SIZE]}
                     
                     message = {
                         "type": eventType,
@@ -117,8 +120,13 @@ async def vulnerabilityStream(websocket: WebSocket):
                         "metadata": {"vulnerabilities": len(currentState), "warnings": 0}
                     }
                     
-                    log.debug(f"Sending {eventType} message with {len(chunk)} entries")
-                    await websocket.send_json(message)
+                    log.debug(f"Sending {eventType} event with {len(chunk)} entries")
+                    yield {
+                        "id": str(uuid.uuid4()),
+                        "event": "vulnerability",
+                        "retry": 1500,
+                        "data": json.dumps(message)
+                    }
                 
                 # Update client state
                 clientState = currentState.copy()
@@ -126,34 +134,11 @@ async def vulnerabilityStream(websocket: WebSocket):
             except Empty:
                 # Queue is empty, continue waiting
                 await asyncio.sleep(0.1)
-            except WebSocketDisconnect:
-                # Propagate to outer handler for consistent cleanup
-                raise
-            except RuntimeError as e:
-                # Detect various send-after-close ASGI/runtime messages and disconnect client
-                msg = str(e).lower()
-                if (
-                    "cannot call \"send\" once a close message has been sent" in msg
-                    or "after sending 'websocket.close'" in msg
-                    or "unexpected asgi message 'websocket.send'" in msg
-                    or ("websocket.close" in msg and "after" in msg)
-                ):
-                    log.debug(f"WebSocket send-after-close detected: {str(e)}")
-                    connectedClients.discard(websocket)
-                    break
-                else:
-                    log.error(f"RuntimeError in WebSocket loop: {str(e)}")
-                    await asyncio.sleep(0.1)
             except Exception as e:
-                log.error(f"Error in WebSocket loop: {type(e).__name__}: {str(e)}")
+                log.error(f"Error in SSE loop: {type(e).__name__}: {str(e)}")
                 await asyncio.sleep(0.1)
     
-    except WebSocketDisconnect:
-        log.debug("Client disconnected via WebSocket")
-        connectedClients.discard(websocket)
-    except Exception as e:
-        log.error(f"WebSocket error: {type(e).__name__}: {str(e)}")
-        connectedClients.discard(websocket)
+    return EventSourceResponse(eventGenerator())
 
 
 def startDashboardServer(queueInstance):
