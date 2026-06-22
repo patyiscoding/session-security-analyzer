@@ -1,4 +1,4 @@
-from mitmproxy import http
+from mitmproxy import http, ctx
 from helpers.log import log
 import json
 from collections import defaultdict
@@ -31,7 +31,7 @@ class SessionAnalyzer:
             SessionAnalyzer.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(telemetryQueue,))
             SessionAnalyzer.vulnerabilityServerProcess.start()
             SERVERSTARTED = True
-            print("Vulnerability Dashboard Server started on http://localhost:9998")
+            log.info("Vulnerability Dashboard Server started on http://localhost:9998")
 
                 
         try:
@@ -46,8 +46,14 @@ class SessionAnalyzer:
     
 
     def request(self, flow: http.HTTPFlow):
+        print(flow)
         # if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
         #     return
+        
+        # Skip WebSocket upgrade requests and CONNECT tunnels (for proxied WebSocket connections)
+        if flow.request.method == "CONNECT" or flow.request.headers.get("Upgrade", "").lower() == "websocket":
+            log.debug(f"Skipping {flow.request.method} request to {flow.request.url}")
+            return
         
         if ":5173" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the request is coming from the dashboard frontend, ignore it
             return
@@ -78,7 +84,6 @@ class SessionAnalyzer:
                     host = flow.request.host
                     
                     log.info(f"Dumped web storage for {host}")
-                    print(json.dumps(jsonParsed, indent=4))
                     
                     flow.response = http.Response.make(
                         200, 

@@ -79,7 +79,7 @@ class SecretsScanner():
 
             from sessionAnalyzer import SessionAnalyzer
             SessionAnalyzer.activeGitLeaksProcesses.add(process)
-            print("Active GitLeaks processes:", SessionAnalyzer.activeGitLeaksProcesses)
+            log.info(f"Active GitLeaks processes: {len(SessionAnalyzer.activeGitLeaksProcesses)}")
 
             # Add timeout to prevent hanging indefinitely
             try:

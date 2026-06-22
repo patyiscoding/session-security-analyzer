@@ -224,9 +224,6 @@ class JWTAnalyzer:
 
                 JWTAnalyzer.runningHashcats.append({"isRunning": 1, "process": process}) # 1 for running, 0 for finished
 
-                # for line in process.stdout:
-                #     print(line, end="")
-
                 outputThread = threading.Thread(target=JWTAnalyzer.logHashcatOutput, args=(process,), daemon=True)
                 outputThread.start()
 

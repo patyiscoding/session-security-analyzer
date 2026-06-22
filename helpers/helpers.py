@@ -24,9 +24,6 @@ class Helpers():
 
     def addToResults(flow, contents, url, level):
         from sessionAnalyzer import SessionAnalyzer
-        
-        parsedURL = urlparse(url)
-        host = parsedURL.netloc
 
         # split by / but ignore the ones in https:// or http://
         pathElements = re.split(r'(?<!https:/)(?<!https:)(?<!http:)(?<!http:/)[/]', url)
