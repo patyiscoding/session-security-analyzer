@@ -26,9 +26,7 @@ class SessionAnalyzer:
         "metadata": {},
         "data": {}
     }
-
-    def __init__(self):
-        self.vulnerabilityServerProcess = None
+    vulnerabilityServerProcess = None
         
 
     def load(self, loader: Loader):
@@ -36,13 +34,12 @@ class SessionAnalyzer:
         _analyzer_instance = self
 
         if current_process().name == 'MainProcess' and not SERVERSTARTED:
-            self.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(telemetryQueue,))
-            self.vulnerabilityServerProcess.start()
+            SessionAnalyzer.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(telemetryQueue,))
+            SessionAnalyzer.vulnerabilityServerProcess.start()
             SERVERSTARTED = True
             print("Vulnerability Dashboard Server started on http://localhost:9999")
 
                 
-        # Set up signal handler for graceful shutdown
         try:
             def signal_handler(signum, frame):
                 log.info("Received interrupt signal, shutting down...")
@@ -154,11 +151,11 @@ class SessionAnalyzer:
                 log.debug(f"Cancelling task: {task}")
                 task.cancel()
         
-        if current_process().name == 'MainProcess' and self.vulnerabilityServerProcess:
+        if current_process().name == 'MainProcess' and SessionAnalyzer.vulnerabilityServerProcess:
             log.debug("Terminating dashboard server process")
-            self.vulnerabilityServerProcess.terminate()
+            SessionAnalyzer.vulnerabilityServerProcess.terminate()
             try:
-                self.vulnerabilityServerProcess.join(timeout=1)
+                SessionAnalyzer.vulnerabilityServerProcess.join(timeout=1)
             except Exception as e:
                 log.error(f"Error joining server process: {e}")
 
@@ -184,8 +181,7 @@ class SessionAnalyzer:
                     log.debug(f"Error killing hashcat process: {e}")
         
         log.info("Shutdown complete, force exiting")
-        # Use os._exit to forcefully terminate without cleanup
-        # This bypasses any pending asyncio operations
+
         os._exit(0)
 
 

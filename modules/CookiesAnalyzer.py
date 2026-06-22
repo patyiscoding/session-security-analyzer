@@ -1,5 +1,4 @@
 from helpers.log import log
-import logging
 import re
 from dateutil import parser
 from datetime import datetime, timedelta, timezone
