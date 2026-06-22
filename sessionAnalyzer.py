@@ -1,11 +1,5 @@
 from mitmproxy import http
-from modules.CookiesAnalyzer import CookiesAnalyzer
 from helpers.log import log
-from helpers.helpers import Helpers
-from modules.SecretsScanner import SecretsScanner
-from modules.HeadersAnalyzer import HeadersAnalyzer
-from modules.WebStorageAnalyzer import WebStorageAnalyzer
-from modules.JWTAnalyzer import JWTAnalyzer
 import json
 from collections import defaultdict
 from dashboardServer import startDashboardServer, telemetryQueue
@@ -59,6 +53,9 @@ class SessionAnalyzer:
             return
         
         start = time.perf_counter()
+
+        from modules.WebStorageAnalyzer import WebStorageAnalyzer
+        from modules.SecretsScanner import SecretsScanner
 
         if WebStorageAnalyzer.webStorageEndpoint in flow.request.url:
             if flow.request.method == "OPTIONS":
@@ -122,8 +119,15 @@ class SessionAnalyzer:
         
         start = time.perf_counter()
 
+        from helpers.helpers import Helpers
+        from modules.CookiesAnalyzer import CookiesAnalyzer
+        from modules.HeadersAnalyzer import HeadersAnalyzer
+        from modules.JWTAnalyzer import JWTAnalyzer
+        from modules.WebStorageAnalyzer import WebStorageAnalyzer
+        from modules.SecretsScanner import SecretsScanner
+
         Helpers.printResponse(flow)
-        
+
         CookiesAnalyzer.evaluateSetCookies(flow)
         HeadersAnalyzer.analyzeHeaders(flow)
         WebStorageAnalyzer.analyzeWebStorage(flow)
@@ -169,6 +173,7 @@ class SessionAnalyzer:
                 except Exception as e:
                     log.debug(f"Error killing gitleaks process: {e}")
         
+        from modules.JWTAnalyzer import JWTAnalyzer
         # Kill all active Hashcat subprocesses
         for hashcat_entry in JWTAnalyzer.runningHashcats:
             if hashcat_entry["isRunning"] == 1:
