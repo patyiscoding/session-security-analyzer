@@ -81,18 +81,15 @@ async def vulnerabilityStream(websocket: WebSocket):
         
         while True:
             try:
-                data = await asyncio.to_thread(telemetryQueue.get, block=True, timeout=0.5)
-                
-                # Parse incoming data
-                if isinstance(data, str):
-                    parsedData = json.loads(data)
-                    # Extract only the 'data' field if it has the wrapper structure
-                    rawState = parsedData.get("data", parsedData) if isinstance(parsedData, dict) and "data" in parsedData else parsedData
-                else:
-                    rawState = data
-                
+                dataObject = await asyncio.to_thread(telemetryQueue.get, block=True, timeout=0.5)
+             
+                parsedDataObject = json.loads(dataObject)
+                # Extract only the 'data' field if it has the wrapper structure
+                metadata = parsedDataObject.get("metadata", parsedDataObject)
+                data = parsedDataObject.get("data", parsedDataObject)
+             
                 # Deduplicate URLs
-                currentState = deduplicateVulnerabilities(rawState)
+                currentState = deduplicateVulnerabilities(data)
                 
                 # Calculate delta for this client
                 allKeys = set(currentState.keys()) | set(clientState.keys())
@@ -118,7 +115,7 @@ async def vulnerabilityStream(websocket: WebSocket):
                     message = {
                         "type": eventType,
                         "data": chunk,
-                        "metadata": {"vulnerabilities": len(currentState), "warnings": 0}
+                        "metadata": metadata
                     }
                     
                     log.debug(f"Sending {eventType} message with {len(chunk)} entries")

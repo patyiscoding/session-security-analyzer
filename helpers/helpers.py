@@ -8,7 +8,8 @@ class Helpers():
     warnings = 0
 
     def printResponse(flow):
-        print("") # for newline before each new request/response log
+        print("")
+        print("") # for newlines before each new request/response log
         log.metadata(f"[{flow.request.method}] ({flow.response.status_code}) {flow.request.url} {flow.response.headers.get("Content-Type", "")}")
 
     def logWarning(flow, contents, path):
@@ -28,8 +29,6 @@ class Helpers():
         # split by / but ignore the ones in https:// or http://
         pathElements = re.split(r'(?<!https:/)(?<!https:)(?<!http:)(?<!http:/)[/]', url)
         parts = [p for p in pathElements if p and p != "https:" and p!= "http:"]
-        # pathElements = [elem for elem in parsedURL.path.split('/') if elem]
-
         
         parts = []
         for p in pathElements:
@@ -55,20 +54,29 @@ class Helpers():
 
         lastToken = parts[-1] if len(parts) > 1 else "/" 
 
+        convertedContents = contents.encode('ascii','ignore').decode('ascii') # convert Unicode characters
+
         leaf = {
             "level": level,
-            "contents": contents.encode('ascii','ignore').decode('ascii'), # convert Unicode characters
+            "contents": convertedContents, 
             "url": url,
             "severity": "unknown",
-            "request": flow.request.get_text(strict=False),
-            "response": flow.response.get_text(strict=False)
+            "request": flow.request.get_text(strict=False).replace("\"", "'"),
+            "response": flow.response.get_text(strict=False).replace("\"", "'")
         }
+
         
         if currentNode.get(lastToken) is None:
             currentNode[lastToken] = [leaf]
-        elif isinstance(currentNode[lastToken], list):
+        if isinstance(currentNode[lastToken], list):
+            doesLeafExistAlready = any(leaf.get("contents", "") == convertedContents for leaf in currentNode[lastToken])
+        
+            if doesLeafExistAlready:
+                log.debug(f"Skipped adding a {level} due to a duplicate")
+                return
+
             currentNode[lastToken].append(leaf)
         else:
             currentNode[lastToken] = [leaf]
-        
+
         telemetryQueue.put(json.dumps(SessionAnalyzer.vulnerabilityScanResultsJSON))

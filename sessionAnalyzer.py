@@ -46,7 +46,6 @@ class SessionAnalyzer:
     
 
     def request(self, flow: http.HTTPFlow):
-        print(flow)
         # if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
         #     return
         
@@ -55,8 +54,8 @@ class SessionAnalyzer:
             log.debug(f"Skipping {flow.request.method} request to {flow.request.url}")
             return
         
-        if ":5173" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the request is coming from the dashboard frontend, ignore it
-            return
+        # if ":5173" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the request is coming from the dashboard frontend, ignore it
+        #     return
         
         start = time.perf_counter()
 

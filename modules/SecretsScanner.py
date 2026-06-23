@@ -30,7 +30,13 @@ class SecretsScanner():
         else:
             text = flow.response.get_text(strict=False)
             ct = flow.response.headers.get("Content-Type", "")
-            if not (("text/html" in ct or "application/json" in ct or "text/plain" in ct or "text/javascript") and len(text) > 0):
+            if (("text/html" in ct or "application/json" in ct or "text/plain" in ct or "text/javascript") and len(text) > 0):
+                pass
+            elif hasattr(flow.response, "path") and str(flow.response.path).endswith(".js"):
+                pass
+            elif ct is None:
+                pass
+            else:
                 return
             
         if not text:
