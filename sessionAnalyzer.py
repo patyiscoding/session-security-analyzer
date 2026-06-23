@@ -21,11 +21,17 @@ class SessionAnalyzer:
         "data": {}
     }
     vulnerabilityServerProcess = None
-        
 
     def load(self, loader: Loader):
         global SERVERSTARTED, _analyzer_instance
         _analyzer_instance = self
+
+        loader.add_option(
+            name="useAttackMode",
+            typespec=bool,
+            default=False,
+            help="Whether the script is to be run in attack mode",
+        )
 
         if current_process().name == 'MainProcess' and not SERVERSTARTED:
             SessionAnalyzer.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(telemetryQueue,))
@@ -44,6 +50,9 @@ class SessionAnalyzer:
         except Exception as e:
             log.warning(f"Failed to set up signal handler: {e}")
     
+    def configure(updated):
+        if "useAttackMode" in updated:
+            ctx.log.info(f"Use Attack mode?: {ctx.options.useAttackMode}")
 
     def request(self, flow: http.HTTPFlow):
         # if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:

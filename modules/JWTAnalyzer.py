@@ -15,16 +15,15 @@ import threading
 
 class JWTAnalyzer:
     fuzzedJWTs = set()
-
-    BASE_DIR = Path(__file__).resolve().parent
-    hashcat = BASE_DIR / "../tools/hashcat/hashcat.exe"
-    rockyouwordlist = BASE_DIR / "../third-party/wordlists/seclists/rockyou.txt"
-    jwtsecretswordlist = BASE_DIR / "../third-party/wordlists/jwt-secrets/jwt.secrets.list"
-
     runningHashcats = []
 
+    BASE_DIR = Path(__file__).resolve().parent
+    hashcat = BASE_DIR / "../third-party/hashcat/hashcat.exe"
+    rockyouwordlist = BASE_DIR / "../third-party/hashcat/wordlists/seclists/rockyou.txt"
+    jwtsecretswordlist = BASE_DIR / "../third-party/wordlists/jwt-secrets/jwt.secrets.list"
+
     def lookForJWTS(flow: http.HTTPFlow):
-         # From Authorization header
+        # From Authorization header
         AUTHORIZATION = flow.request.headers.get("Authorization", "")
         if AUTHORIZATION.startswith("Bearer "):
             log.debug("Evaluating JWT from the Authorization header")
@@ -67,56 +66,39 @@ class JWTAnalyzer:
             unverifiedHeader = jwt.get_unverified_header(JWT)
             unverifiedPayload = jwt.decode(JWT, options={"verify_signature": False})
 
-            # --- TEST 1: The 'none' Algorithm Vulnerability ---
-            # Attackers can change 'alg' to 'none', remove the signature, and forge data.
             alg = unverifiedHeader.get("alg", "").lower()
             if alg == "none":
-                Helpers.vulnerabilityFound("JWT 'none' algorithm is used by the client")
+                Helpers.logWarning("JWT 'none' algorithm is used by the client")
             
-
-            # --- TEST 2: Weak/Insecure Signature Algorithms ---
-            # Symmetric algorithms (like HS256) are prone to brute-forcing if secrets are weak.
-            # Asymmetric (like RS256) is safer. If HS256 is used, flag it for manual review.
             if alg == "hs256":
                 Helpers.logWarning(flow, f"JWT uses symmetric HS256. Risk of secret brute-forcing.", flow.request.url)
 
-            # --- TEST 3: Sensitive Information Leakage in Payload ---
-            # JWT payloads are NOT encrypted; they are only base64 encoded. anyone can read them.
-            sensitiveKeywords = ["password", "secret", "ssn", "role", "admin"]
-            lower_payload = {
-                k.lower(): copy.deepcopy(v)
-                for k, v in unverifiedPayload.items()
-            }
-
-            # for keyword in sensitiveKeywords:
-            #     if keyword in lower_payload:
-            #         log.warning(f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(lower_payload, indent=4)}")
-                    
-            #         if keyword == "role":
-            #             log.info(json.dumps(unverifiedPayload))
-            #             JWTAnalyzer.attackClaimChange(flow, JWT, "role", "admin", lower_payload[keyword])
-
-            # change role to admin
-            #if hs256, then compute hashes using hashcat
-            # if rs256, algorithm confusion
-
-            # --- TEST 4: Missing Expiration (No 'exp' claim) ---
-            # If a token never expires, a stolen token is valid forever.
             if "exp" not in unverifiedPayload:
                 Helpers.logWarning(flow, f"JWT is missing an expiration timestamp ('exp' claim)", flow.request.url)
 
-            #lack of signature verification
-            
-            # JWTAnalyzer.attackWithAlgNone(flow, JWT)
-            JWTAnalyzer.attackWithHashcat(JWT)
+            if ctx.options.useAttackMode == True:
+                # Attack no. 1
+                sensitiveKeywords = ["password", "secret", "ssn", "role", "admin"]
+                lowerPayload = {
+                    k.lower(): copy.deepcopy(v)
+                    for k, v in unverifiedPayload.items()
+                }
 
+                for keyword in sensitiveKeywords:
+                    if keyword in lowerPayload:
+                        Helpers.logWarning(f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(lowerPayload, indent=4)}")
+                        
+                        if keyword == "role":
+                            JWTAnalyzer.attackClaimChange(flow, JWT, "role", "admin", lowerPayload[keyword])
+                
+                # Attack no. 2
+                JWTAnalyzer.attackWithAlgNone(flow, JWT)
+                # Attack no. 3
+                JWTAnalyzer.attackWithHashcat(JWT)
+        
         except Exception as e:
             log.exception(e)
-            pass
-
-        return
     
-
 
     # ATTACK: Replay request with algorithm none
     def attackWithAlgNone(flow, JWT):
