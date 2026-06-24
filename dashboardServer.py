@@ -14,23 +14,6 @@ lastSentState = {}
 connectedClients = set()
 telemetryQueue = Queue()
 
-def normalize_url(url_string: str) -> str:
-    """Normalize URL by removing query parameters and fragments.
-connectedClients = set()
-telemetryQueue = Queue()
-
-# def normalize_url(url_string: str) -> str:
-    
-#     This treats https://example.com/path?a=1 and https://example.com/path?b=2 as the same.
-#     """
-#     try:
-#         parsed = urlparse(url_string)
-#         # Reconstruct URL without query string and fragment
-#         normalized = urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', '', ''))
-#         return normalized
-#     except Exception:
-#         return url_string
-
 def deduplicateVulnerabilities(data: dict) -> dict:
     """Deduplicate vulnerabilities by normalizing URLs in keys.
     
@@ -89,16 +72,16 @@ async def vulnerabilityStream(websocket: WebSocket):
                 data = parsedDataObject.get("data", parsedDataObject)
              
                 # Deduplicate URLs
-                currentState = deduplicateVulnerabilities(data)
+                # currentState = deduplicateVulnerabilities(data)
                 
                 # Calculate delta for this client
-                allKeys = set(currentState.keys()) | set(clientState.keys())
+                allKeys = set(data.keys()) | set(clientState.keys())
                 delta = {}
                 
                 for key in allKeys:
-                    if key not in clientState or currentState.get(key) != clientState.get(key):
-                        if key in currentState:
-                            delta[key] = currentState[key]
+                    if key not in clientState or data.get(key) != clientState.get(key):
+                        if key in data:
+                            delta[key] = data[key]
                 
                 if not delta:
                     # No changes
@@ -129,7 +112,7 @@ async def vulnerabilityStream(websocket: WebSocket):
                         raise
                 
                 # Update client state
-                clientState = currentState.copy()
+                clientState = data.copy()
                 
             except Empty:
                 # Queue is empty, continue waiting
