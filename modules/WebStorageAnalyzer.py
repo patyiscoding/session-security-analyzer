@@ -12,6 +12,11 @@ class WebStorageAnalyzer:
         if flow.response and "text/html" in flow.response.headers.get("Content-Type", ""):
 
             HTML = flow.response.text
+            
+            if len(HTML) > 10_000_000:  # >10MB
+                log.warning(f"Skipping Web Storage analysis: HTML too large ({len(HTML)/1024/1024:.1f}MB)")
+                return
+                
             JSPayload = f"""
                 <script type="module">
                     let webStorageData = {{

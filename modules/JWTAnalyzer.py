@@ -78,7 +78,7 @@ class JWTAnalyzer:
 
             if ctx.options.useAttackMode == True:
                 # Attack no. 1
-                sensitiveKeywords = ["password", "secret", "ssn", "role", "admin"]
+                sensitiveKeywords = ["password", "secret", "token", "key", "username", "email", "ssn", "role", "admin"]
                 lowerPayload = {
                     k.lower(): copy.deepcopy(v)
                     for k, v in unverifiedPayload.items()
@@ -98,7 +98,6 @@ class JWTAnalyzer:
         
         except Exception as e:
             log.exception(e)
-    
 
     # ATTACK: Replay request with algorithm none
     def attackWithAlgNone(flow, JWT):
@@ -201,7 +200,8 @@ class JWTAnalyzer:
                     text=True,
                     cwd="./third-party/hashcat",
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
+                    stderr=subprocess.PIPE,
+                    timeout=120
                 )
 
                 JWTAnalyzer.runningHashcats.append({"isRunning": 1, "process": process}) # 1 for running, 0 for finished
@@ -209,6 +209,10 @@ class JWTAnalyzer:
                 outputThread = threading.Thread(target=JWTAnalyzer.logHashcatOutput, args=(process,), daemon=True)
                 outputThread.start()
 
+            except subprocess.TimeoutExpired:
+                log.warning("Hashcat attack timed out after 120s - terminating process")
+                process.kill()
+                process.wait()
             except Exception as e:
                 log.exception("Hashcat attack failed with exception: ", e)
         else:

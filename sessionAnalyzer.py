@@ -39,7 +39,6 @@ class SessionAnalyzer:
             SERVERSTARTED = True
             log.info("Vulnerability Dashboard Server started on http://localhost:9998")
 
-                
         try:
             def signal_handler(signum, frame):
                 log.info("Received interrupt signal, shutting down...")
@@ -50,8 +49,8 @@ class SessionAnalyzer:
         except Exception as e:
             log.warning(f"Failed to set up signal handler: {e}")
     
-    def configure(updated):
-        if "useAttackMode" in updated:
+    def configure(self, options):
+        if "useAttackMode" in options:
             ctx.log.info(f"Use Attack mode?: {ctx.options.useAttackMode}")
 
     def request(self, flow: http.HTTPFlow):

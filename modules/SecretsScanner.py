@@ -43,6 +43,10 @@ class SecretsScanner():
             log.debug("Contents for secrets scanning are empty")
             return
 
+        if len(text) > 5_000_000:
+            log.warning(f"Skipping secrets scan: response too large ({len(text)/1024/1024:.1f}MB)")
+            return
+
         SecretsScanner.lookForSecretsWithRegexes(flow, text)
         
         try:
