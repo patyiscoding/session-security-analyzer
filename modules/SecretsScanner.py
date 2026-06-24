@@ -12,6 +12,10 @@ import asyncio
 import os
 
 class SecretsScanner():
+    def __init__(self, Helpers, SessionAnalyzer):
+        self.SessionAnalyzer = SessionAnalyzer
+        self.Helpers = Helpers
+
     secretsPatterns = []
 
     SCRIPT_DIR = Path(__file__).resolve().parent
@@ -23,7 +27,7 @@ class SecretsScanner():
         except yaml.YAMLError as exc:
             logging.exception(exc)
 
-    def lookForSecrets(flow, content=None):
+    def lookForSecrets(self, flow, content=None):
         log.debug("EVALUATING SECRETS")
         if content:
             text = content
@@ -47,17 +51,16 @@ class SecretsScanner():
             log.warning(f"Skipping secrets scan: response too large ({len(text)/1024/1024:.1f}MB)")
             return
 
-        SecretsScanner.lookForSecretsWithRegexes(flow, text)
+        self.lookForSecretsWithRegexes(flow, text)
         
         try:
-            task = asyncio.create_task(SecretsScanner.lookForSecretsWithGitLeaks(flow, text))
-            from sessionAnalyzer import SessionAnalyzer
-            SessionAnalyzer.activeTasks.add(task)
-            task.add_done_callback(lambda t: SessionAnalyzer.activeTasks.discard(t))
+            task = asyncio.create_task(self.lookForSecretsWithGitLeaks(flow, text))
+            self.SessionAnalyzer.activeTasks.add(task)
+            task.add_done_callback(lambda t: self.SessionAnalyzer.activeTasks.discard(t))
         except RuntimeError as e:
             log.error(f"Failed to create GitLeaks task: {e}")
         
-    def lookForSecretsWithRegexes(flow, text):
+    def lookForSecretsWithRegexes(self, flow, text):
         log.debug("Starting regex secrets scan")
         matches = []
 
@@ -72,10 +75,10 @@ class SecretsScanner():
                 if len(match) > 500:
                     log.info("Skipping match found by SecretsScanner; length too big")
                     continue
-                Helpers.logVulnerability(flow, f"Found potentially sensitive string: {match}", flow.request.url)
+                self.Helpers.logVulnerability(flow, f"Found potentially sensitive string: {match}", flow.request.url)
 
 
-    async def lookForSecretsWithGitLeaks(flow, text):
+    async def lookForSecretsWithGitLeaks(self, flow, text):
         process = None
         try:
             log.debug("Starting GitLeaks secrets scan")
@@ -87,9 +90,8 @@ class SecretsScanner():
                 stderr=asyncio.subprocess.PIPE
             )
 
-            from sessionAnalyzer import SessionAnalyzer
-            SessionAnalyzer.activeGitLeaksProcesses.add(process)
-            log.info(f"Active GitLeaks processes: {len(SessionAnalyzer.activeGitLeaksProcesses)}")
+            self.SessionAnalyzer.activeGitLeaksProcesses.add(process)
+            log.info(f"Active GitLeaks processes: {len(self.SessionAnalyzer.activeGitLeaksProcesses)}")
 
             # Add timeout to prevent hanging indefinitely
             try:
@@ -107,7 +109,7 @@ class SecretsScanner():
                 if len(stdout) > 500:
                         log.info("Skipping match found by SecretsScanner; length too big")
                         return
-                Helpers.logVulnerability(flow, f"(GitLeaks) Found potentially sensitive string: {json.loads(stdout)}")
+                self.Helpers.logVulnerability(flow, f"(GitLeaks) Found potentially sensitive string: {json.loads(stdout)}")
         except asyncio.CancelledError:
             log.debug("GitLeaks scan cancelled")
             if process and process.returncode is None:
@@ -120,6 +122,5 @@ class SecretsScanner():
             log.error(f"GitLeaks scan error: {e}")
         finally:
             if process:
-                from sessionAnalyzer import SessionAnalyzer
-                if process in SessionAnalyzer.activeGitLeaksProcesses:
-                    SessionAnalyzer.activeGitLeaksProcesses.remove(process)
+                if process in self.SessionAnalyzer.activeGitLeaksProcesses:
+                    self.SessionAnalyzer.activeGitLeaksProcesses.remove(process)

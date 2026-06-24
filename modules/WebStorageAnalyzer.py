@@ -7,7 +7,7 @@ class WebStorageAnalyzer:
     webStorageEndpoint = "webStorageDump"
     lastWebStorageDump = None
 
-    def analyzeWebStorage(flow):
+    def analyzeWebStorage(self, flow):
         log.debug("EVALUATING WEB STORAGE")
         if flow.response and "text/html" in flow.response.headers.get("Content-Type", ""):
 

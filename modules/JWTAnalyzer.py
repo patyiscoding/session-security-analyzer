@@ -14,6 +14,10 @@ import re
 import threading
 
 class JWTAnalyzer:
+    def __init__(self, Helpers, SessionAnalyzer):
+        self.SessionAnalyzer = SessionAnalyzer
+        self.Helpers = Helpers
+
     fuzzedJWTs = set()
     runningHashcats = []
 
@@ -22,19 +26,19 @@ class JWTAnalyzer:
     rockyouwordlist = BASE_DIR / "../third-party/hashcat/wordlists/seclists/rockyou.txt"
     jwtsecretswordlist = BASE_DIR / "../third-party/wordlists/jwt-secrets/jwt.secrets.list"
 
-    def lookForJWTS(flow: http.HTTPFlow):
+    def lookForJWTS(self, flow: http.HTTPFlow):
         # From Authorization header
         AUTHORIZATION = flow.request.headers.get("Authorization", "")
         if AUTHORIZATION.startswith("Bearer "):
             log.debug("Evaluating JWT from the Authorization header")
-            JWTAnalyzer.evaluateJWT(AUTHORIZATION.split(" ")[1], flow)
+            self.evaluateJWT(AUTHORIZATION.split(" ")[1], flow)
 
         # From Cookie header
         matches = re.findall("token=((?:[a-zA-Z0-9_-]+\\.){2}[a-zA-Z0-9_-]+)", flow.request.headers.get("Cookie", ""))
         if len(matches) != 0 and matches[0] is not None:
             log.debug("Evaluating JWT from the Cookie header")
             for match in matches:
-                JWTAnalyzer.evaluateJWT(match, flow)
+                self.evaluateJWT(match, flow)
 
         # From URL
         matches = re.findall("token=((?:[a-zA-Z0-9_-]+\\.){2}[a-zA-Z0-9_-]+)", flow.request.url)
@@ -43,13 +47,13 @@ class JWTAnalyzer:
         if len(matches) != 0 and matches[0] is not None:
             log.debug("Evaluating JWT from the URL")
             for match in matches:
-                Helpers.logVulnerability(flow, f"JWT found in URL: {match}", flow.request.url)
-                JWTAnalyzer.evaluateJWT(match, flow)
+                self.Helpers.logVulnerability(flow, f"JWT found in URL: {match}", flow.request.url)
+                self.evaluateJWT(match, flow)
 
 
-    def evaluateJWT(JWT, flow):
+    def evaluateJWT(self, JWT, flow):
         if "Active-Attack" in flow.request.headers.get("X-Fuzzer", ""):
-            JWTAnalyzer.evaluateAttackResponse(flow, flow.request.headers.get("X-Fuzzer"))
+            self.evaluateAttackResponse(flow, flow.request.headers.get("X-Fuzzer"))
             return
 
         if JWT in JWTAnalyzer.fuzzedJWTs:
@@ -68,13 +72,13 @@ class JWTAnalyzer:
 
             alg = unverifiedHeader.get("alg", "").lower()
             if alg == "none":
-                Helpers.logWarning("JWT 'none' algorithm is used by the client")
+                self.Helpers.logWarning("JWT 'none' algorithm is used by the client")
             
             if alg == "hs256":
-                Helpers.logWarning(flow, f"JWT uses symmetric HS256. Risk of secret brute-forcing.", flow.request.url)
+                self.Helpers.logWarning(flow, f"JWT uses symmetric HS256. Risk of secret brute-forcing.", flow.request.url)
 
             if "exp" not in unverifiedPayload:
-                Helpers.logWarning(flow, f"JWT is missing an expiration timestamp ('exp' claim)", flow.request.url)
+                self.Helpers.logWarning(flow, f"JWT is missing an expiration timestamp ('exp' claim)", flow.request.url)
 
             if ctx.options.useAttackMode == True:
                 # Attack no. 1
@@ -86,21 +90,21 @@ class JWTAnalyzer:
 
                 for keyword in sensitiveKeywords:
                     if keyword in lowerPayload:
-                        Helpers.logWarning(f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(lowerPayload, indent=4)}")
+                        self.Helpers.logWarning(f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(lowerPayload, indent=4)}")
                         
                         if keyword == "role":
-                            JWTAnalyzer.attackClaimChange(flow, JWT, "role", "admin", lowerPayload[keyword])
+                            self.attackClaimChange(flow, JWT, "role", "admin", lowerPayload[keyword])
                 
                 # Attack no. 2
-                JWTAnalyzer.attackWithAlgNone(flow, JWT)
+                self.attackWithAlgNone(flow, JWT)
                 # Attack no. 3
-                JWTAnalyzer.attackWithHashcat(JWT)
+                self.attackWithHashcat(JWT)
         
         except Exception as e:
             log.exception(e)
 
     # ATTACK: Replay request with algorithm none
-    def attackWithAlgNone(flow, JWT):
+    def attackWithAlgNone(self, flow, JWT):
         log.debug("ATTACK: JWT algorithm switched to none")
         JWTwithAlgNone = None
 
@@ -133,7 +137,7 @@ class JWTAnalyzer:
         ctx.master.commands.call("replay.client", [attackFlow])
 
 
-    def attackClaimChange(flow, JWT, claimToChange, newClaimValue, previousValue):
+    def attackClaimChange(self, flow, JWT, claimToChange, newClaimValue, previousValue):
         log.debug(f"ATTACK: JWT claim {claimToChange} switched to {newClaimValue} from {previousValue}")
         JWTWithClaimChanged = None
 
@@ -171,7 +175,7 @@ class JWTAnalyzer:
             log.hashcat(line.rstrip("\r\n"))
 
 
-    def attackWithHashcat(JWT):
+    def attackWithHashcat(self, JWT):
         log.debug(f"ATTACK: Checking if Hashcat attack is possible")
 
         # Checking if the header lists a compatible signing algorithm
@@ -206,7 +210,7 @@ class JWTAnalyzer:
 
                 JWTAnalyzer.runningHashcats.append({"isRunning": 1, "process": process}) # 1 for running, 0 for finished
 
-                outputThread = threading.Thread(target=JWTAnalyzer.logHashcatOutput, args=(process,), daemon=True)
+                outputThread = threading.Thread(target=self.logHashcatOutput, args=(process,), daemon=True)
                 outputThread.start()
 
             except subprocess.TimeoutExpired:
@@ -219,7 +223,7 @@ class JWTAnalyzer:
             log.info(f"Skipping Hashcat attack due to an incompatible signing algorithm: {headerJSON['alg']}")
 
 
-    def evaluateAttackResponse(attackFlow: http.HTTPFlow, attackHeader):
+    def evaluateAttackResponse(self, attackFlow: http.HTTPFlow, attackHeader):
         log.debug("Evaluating attack response")
         originalStatus = attackFlow.metadata.get("originalStatus")
         log.debug(f"Original HTTP status: {originalStatus}")
@@ -243,4 +247,4 @@ class JWTAnalyzer:
                 case "Active-Attack-Claim":
                     message = "role claim change accepted"
 
-            Helpers.vulnerabilityFound(f"{message} on {path} ({attackStatus})")
+            self.Helpers.vulnerabilityFound(f"{message} on {path} ({attackStatus})")

@@ -9,11 +9,29 @@ import signal
 import os
 import threading
 import time
+from helpers.helpers import Helpers
+from modules.CookiesAnalyzer import CookiesAnalyzer
+from modules.HeadersAnalyzer import HeadersAnalyzer
+from modules.JWTAnalyzer import JWTAnalyzer
+from modules.WebStorageAnalyzer import WebStorageAnalyzer
+from modules.SecretsScanner import SecretsScanner
 
 SERVERSTARTED = False
 _analyzer_instance = None
 
 class SessionAnalyzer:
+    def __init__(self):
+        # Step 1: Create Helpers instance (passes self for circular reference)
+        self.Helpers = Helpers(SessionAnalyzer=self)
+        
+        # Step 2: Inject Helpers instance to other modules
+        self.CookiesAnalyzer = CookiesAnalyzer(Helpers=self.Helpers, SessionAnalyzer=self)
+        self.HeadersAnalyzer = HeadersAnalyzer(Helpers=self.Helpers, SessionAnalyzer=self)
+        self.JWTAnalyzer = JWTAnalyzer(Helpers=self.Helpers, SessionAnalyzer=self)
+        self.SecretsScanner = SecretsScanner(Helpers=self.Helpers, SessionAnalyzer=self)
+        self.WebStorageAnalyzer = WebStorageAnalyzer()
+        
+
     activeGitLeaksProcesses = set()
     activeTasks = set()
     vulnerabilityScanResultsJSON = {
@@ -21,6 +39,7 @@ class SessionAnalyzer:
         "data": {}
     }
     vulnerabilityServerProcess = None
+    
 
     def load(self, loader: Loader):
         global SERVERSTARTED, _analyzer_instance
@@ -67,10 +86,7 @@ class SessionAnalyzer:
         
         start = time.perf_counter()
 
-        from modules.WebStorageAnalyzer import WebStorageAnalyzer
-        from modules.SecretsScanner import SecretsScanner
-
-        if WebStorageAnalyzer.webStorageEndpoint in flow.request.url:
+        if self.WebStorageAnalyzer.webStorageEndpoint in flow.request.url:
             if flow.request.method == "OPTIONS":
                 flow.response = http.Response.make(
                     204,
@@ -101,9 +117,9 @@ class SessionAnalyzer:
                         }
                     )
 
-                    if WebStorageAnalyzer.lastWebStorageDump == None:
-                        WebStorageAnalyzer.lastWebStorageDump = jsonParsed
-                    elif WebStorageAnalyzer.lastWebStorageDump == jsonParsed: # if the storage dump is the same as the last one, don't run the secrets scan
+                    if self.WebStorageAnalyzer.lastWebStorageDump == None:
+                        self.WebStorageAnalyzer.lastWebStorageDump = jsonParsed
+                    elif self.WebStorageAnalyzer.lastWebStorageDump == jsonParsed: # if the storage dump is the same as the last one, don't run the secrets scan
                         log.debug("Skipping secrets evaluation")
                         return
 
@@ -111,7 +127,7 @@ class SessionAnalyzer:
                         log.debug(f"EVALUATING {webStorageType}")
                         
                         webStorageDumpItem = json.dumps(dict(jsonParsed[webStorageType].items()))
-                        SecretsScanner.lookForSecrets(flow, webStorageDumpItem)
+                        self.SecretsScanner.lookForSecrets(flow, webStorageDumpItem)
 
                 except Exception as e:
                     log.error(f"Failed to process web storage dump: {e}")
@@ -131,20 +147,15 @@ class SessionAnalyzer:
         
         start = time.perf_counter()
 
-        from helpers.helpers import Helpers
-        from modules.CookiesAnalyzer import CookiesAnalyzer
-        from modules.HeadersAnalyzer import HeadersAnalyzer
-        from modules.JWTAnalyzer import JWTAnalyzer
-        from modules.WebStorageAnalyzer import WebStorageAnalyzer
-        from modules.SecretsScanner import SecretsScanner
+  
 
-        Helpers.printResponse(flow)
+        self.Helpers.printResponse(flow)
 
-        CookiesAnalyzer.evaluateSetCookies(flow)
-        HeadersAnalyzer.analyzeHeaders(flow)
-        WebStorageAnalyzer.analyzeWebStorage(flow)
-        SecretsScanner.lookForSecrets(flow)
-        JWTAnalyzer.lookForJWTS(flow)
+        self.CookiesAnalyzer.evaluateSetCookies(flow)
+        self.HeadersAnalyzer.analyzeHeaders(flow)
+        self.WebStorageAnalyzer.analyzeWebStorage(flow)
+        self.SecretsScanner.lookForSecrets(flow)
+        self.JWTAnalyzer.lookForJWTS(flow)
 
         elapsed = time.perf_counter() - start
         if elapsed > 0.05: # slower than 50ms
@@ -185,9 +196,8 @@ class SessionAnalyzer:
                 except Exception as e:
                     log.debug(f"Error killing gitleaks process: {e}")
         
-        from modules.JWTAnalyzer import JWTAnalyzer
         # Kill all active Hashcat subprocesses
-        for hashcat_entry in JWTAnalyzer.runningHashcats:
+        for hashcat_entry in self.JWTAnalyzer.runningHashcats:
             if hashcat_entry["isRunning"] == 1:
                 process = hashcat_entry["process"]
                 try:

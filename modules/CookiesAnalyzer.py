@@ -2,12 +2,15 @@ from helpers.log import log
 import re
 from dateutil import parser
 from datetime import datetime, timedelta, timezone
-from helpers.helpers import Helpers
 
 class CookiesAnalyzer:
+    def __init__(self, Helpers, SessionAnalyzer):
+        self.SessionAnalyzer = SessionAnalyzer
+        self.Helpers = Helpers
+
     cookiesEvaluated = set()
 
-    def evaluateSetCookies(flow) -> None:
+    def evaluateSetCookies(self, flow):
         log.debug("EVALUATING SETCOOKIE")
         SETCOOKIES = flow.response.headers.get_all("Set-Cookie")
         if len(SETCOOKIES) == 0:
@@ -31,18 +34,18 @@ class CookiesAnalyzer:
 
             # HttpOnly, Secure, SameSite
             if "httponly" not in cookie:
-                Helpers.logWarning(flow, f"Cookie {cookieName}: No HttpOnly attribute found. This cookie can be retrieved via JavaScript!", flow.request.url)
+                self.Helpers.logWarning(flow, f"Cookie {cookieName}: No HttpOnly attribute found. This cookie can be retrieved via JavaScript!", flow.request.url)
                
 
             if "secure" not in cookie:
                 if isSensitive:
-                    Helpers.logVulnerability(flow, f"Cookie {cookieName}: No Secure attribute found. This cookie will be sent over unencrypted connections!", flow.request.url)
+                    self.Helpers.logVulnerability(flow, f"Cookie {cookieName}: No Secure attribute found. This cookie will be sent over unencrypted connections!", flow.request.url)
                 else:
-                    Helpers.logWarning(flow, f"Cookie {cookieName}: No Secure attribute found. This cookie will be sent over unencrypted connections!", flow.request.url)
+                    self.Helpers.logWarning(flow, f"Cookie {cookieName}: No Secure attribute found. This cookie will be sent over unencrypted connections!", flow.request.url)
             
             if "samesite=none" in cookie:
                 if "secure" not in cookie:
-                    Helpers.logWarning(flow, f"Cookie {cookieName}: Attribute SameSite is set to None but no Secure attribute set.", flow.request.url)
+                    self.Helpers.logWarning(flow, f"Cookie {cookieName}: Attribute SameSite is set to None but no Secure attribute set.", flow.request.url)
             
             # Checking cookie expiry date
             if "expires" in cookie or "max-age" in cookie:
@@ -52,4 +55,4 @@ class CookiesAnalyzer:
                     now = datetime.now(timezone.utc)
 
                     if dt > now + timedelta(days=30):
-                        Helpers.logWarning(flow, f"Cookie {cookieName}'s expiry date is more than 30 days in the future ({dt - now})", flow.request.url)
+                        self.Helpers.logWarning(flow, f"Cookie {cookieName}'s expiry date is more than 30 days in the future ({dt - now})", flow.request.url)

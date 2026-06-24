@@ -4,28 +4,29 @@ import re
 import json
 
 class Helpers():
+    def __init__(self, SessionAnalyzer):
+        self.SessionAnalyzer = SessionAnalyzer
+    
     vulnerabilities = 0
     warnings = 0
 
-    def printResponse(flow):
+    def printResponse(self, flow):
         print("")
         print("") # for newlines before each new request/response log
         log.metadata(f"[{flow.request.method}] ({flow.response.status_code}) {flow.request.url} {flow.response.headers.get("Content-Type", "")}")
 
-    def logWarning(flow, contents, path):
+    def logWarning(self, flow, contents, path):
         Helpers.warnings += 1
-        Helpers.addToResults(flow, contents, path, "Warning")
+        self.addToResults(flow, contents, path, "Warning")
         log.warning(contents)
     
-    def logVulnerability(flow, contents, path):
+    def logVulnerability(self, flow, contents, path):
         Helpers.vulnerabilities += 1
-        Helpers.addToResults(flow, contents, path, "Vulnerability")
+        self.addToResults(flow, contents, path, "Vulnerability")
         log.critical(f"POTENTIAL VULNERABILITY FOUND: {contents} at path {path}")
 
 
-    def addToResults(flow, contents, url, level):
-        from sessionAnalyzer import SessionAnalyzer
-
+    def addToResults(self, flow, contents, url, level):
         # split by / but ignore the ones in https:// or http://
         pathElements = re.split(r'(?<!https:/)(?<!https:)(?<!http:)(?<!http:/)[/]', url)
         parts = [p for p in pathElements if p and p != "https:" and p!= "http:"]
@@ -39,9 +40,9 @@ class Helpers():
             if p and p != "https:" and p!= "http:":
                 parts.append(p)
 
-        currentNode = SessionAnalyzer.vulnerabilityScanResultsJSON["data"].setdefault(parts[0], {})
-        SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"] = Helpers.vulnerabilities
-        SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"] = Helpers.warnings
+        currentNode = self.SessionAnalyzer.vulnerabilityScanResultsJSON["data"].setdefault(parts[0], {})
+        self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"] = Helpers.vulnerabilities
+        self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"] = Helpers.warnings
 
         for token in parts[1:-1]:
             if token not in currentNode:
@@ -65,7 +66,6 @@ class Helpers():
             "response": flow.response.get_text(strict=False).replace("\"", "'")
         }
 
-        
         if currentNode.get(lastToken) is None:
             currentNode[lastToken] = [leaf]
         if isinstance(currentNode[lastToken], list):
@@ -79,4 +79,4 @@ class Helpers():
         else:
             currentNode[lastToken] = [leaf]
 
-        telemetryQueue.put(json.dumps(SessionAnalyzer.vulnerabilityScanResultsJSON))
+        telemetryQueue.put(json.dumps(self.SessionAnalyzer.vulnerabilityScanResultsJSON))
