@@ -2,12 +2,18 @@ from helpers.log import log
 import json
 from mitmproxy import http
 from bs4 import BeautifulSoup
+import time
 
 class WebStorageAnalyzer:
+    def __init__(self, SessionAnalyzer):
+            self.SessionAnalyzer = SessionAnalyzer
+
     webStorageEndpoint = "webStorageDump"
     lastWebStorageDump = None
 
     def analyzeWebStorage(self, flow):
+        # start_time = time.time()
+
         log.debug("EVALUATING WEB STORAGE")
         if flow.response and "text/html" in flow.response.headers.get("Content-Type", ""):
 
@@ -78,3 +84,6 @@ class WebStorageAnalyzer:
                 log.info(f"Injected web storage script at path {flow.request.url}")
             else:
                 log.info(f"Failed to inject web storage script at path {flow.request.url}. No <head> tag.")
+        
+        # print("WEBSTORAGEANALYZER, ANALYZEWEBSTORAGE: --- %s seconds ---" % (time.time() - start_time))
+        # self.SessionAnalyzer.timings["webstorage"]["time"].append(time.time() - start_time)

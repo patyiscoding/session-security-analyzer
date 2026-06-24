@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import asyncio
 import os
+import time
 
 class SecretsScanner():
     def __init__(self, Helpers, SessionAnalyzer):
@@ -18,16 +19,18 @@ class SecretsScanner():
 
     secretsPatterns = []
 
-    SCRIPT_DIR = Path(__file__).resolve().parent
-    yaml_path = SCRIPT_DIR / ".." / "third-party" / "awesome-regex-list" / "regexes.yml"
+    SCRIPTDIR = Path(__file__).resolve().parent
+    yamlPath = SCRIPTDIR / ".." / "third-party" / "awesome-regex-list" / "regexes.yml"
 
-    with open(yaml_path) as stream:
+    with open(yamlPath) as stream:
         try:
             secretsPatterns = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             logging.exception(exc)
 
     def lookForSecrets(self, flow, content=None):
+        # start_time = time.time()
+
         log.debug("EVALUATING SECRETS")
         if content:
             text = content
@@ -60,12 +63,15 @@ class SecretsScanner():
         except RuntimeError as e:
             log.error(f"Failed to create GitLeaks task: {e}")
         
+        # print("SECRETSSCANNER, LOOKFORSECRETS: --- %s seconds ---" % (time.time() - start_time))
+        # self.SessionAnalyzer.timings["secrets"]["time"].append(time.time() - start_time)
+
+        
     def lookForSecretsWithRegexes(self, flow, text):
         log.debug("Starting regex secrets scan")
         matches = []
 
         for patternObj in SecretsScanner.secretsPatterns:
-            # log.info(f"Checking for {patternObj.get('name', '')}")
             for regex in patternObj.get('regexes', []):
                 finds = re.findall(regex, str(text))
                 matches.extend(finds)
@@ -93,7 +99,7 @@ class SecretsScanner():
             self.SessionAnalyzer.activeGitLeaksProcesses.add(process)
             log.info(f"Active GitLeaks processes: {len(self.SessionAnalyzer.activeGitLeaksProcesses)}")
 
-            # Add timeout to prevent hanging indefinitely
+            # Timeout to prevent hanging indefinitely
             try:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(input=text.encode('utf-8')),
@@ -106,10 +112,17 @@ class SecretsScanner():
                 return
 
             if stdout.strip():
-                if len(stdout) > 500:
-                        log.info("Skipping match found by SecretsScanner; length too big")
-                        return
-                self.Helpers.logVulnerability(flow, f"(GitLeaks) Found potentially sensitive string: {json.loads(stdout)}")
+                try:
+                    leaks = json.loads(stdout)
+                    for leak in leaks:
+                        secretValue = leak.get("Secret", "")
+                        if len(secretValue) > 500:
+                            log.info("Skipping match found by SecretsScanner; length too big")
+                            continue
+                        
+                    self.Helpers.logVulnerability(flow, f"(GitLeaks) Found potentially sensitive string: {json.loads(stdout)}")
+                except json.JSONDecodeError:
+                    log.error("Failed to parse GitLeaks output JSON")
         except asyncio.CancelledError:
             log.debug("GitLeaks scan cancelled")
             if process and process.returncode is None:

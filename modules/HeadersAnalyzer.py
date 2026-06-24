@@ -2,6 +2,7 @@ from helpers.log import log
 import re
 from datetime import timedelta
 from helpers.helpers import Helpers
+import time
 
 
 class HeadersAnalyzer:
@@ -14,10 +15,14 @@ class HeadersAnalyzer:
         headers = flow.response.headers
         path = flow.request.url
 
+        # start_time = time.time()
+
         self.analyzeSTS(flow, headers, path)
         self.analyzeNoSniff(flow, headers, path)
         self.analyzeCORS(flow, headers, path)
         self.analyzeURL(flow, path)
+        # print("HEADERSANALYZER, ANALYZEHEADERS: --- %s seconds ---" % (time.time() - start_time))
+        # self.SessionAnalyzer.timings["headers"]["time"].append(time.time() - start_time)
 
     def analyzeSTS(self, flow, headers, path):
         STS = headers.get("Strict-Transport-Security", "")

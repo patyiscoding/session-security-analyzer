@@ -2,6 +2,7 @@ from helpers.log import log
 import re
 from dateutil import parser
 from datetime import datetime, timedelta, timezone
+import time
 
 class CookiesAnalyzer:
     def __init__(self, Helpers, SessionAnalyzer):
@@ -12,6 +13,8 @@ class CookiesAnalyzer:
 
     def evaluateSetCookies(self, flow):
         log.debug("EVALUATING SETCOOKIE")
+        
+        # start_time = time.time()
         SETCOOKIES = flow.response.headers.get_all("Set-Cookie")
         if len(SETCOOKIES) == 0:
             return
@@ -49,10 +52,19 @@ class CookiesAnalyzer:
             
             # Checking cookie expiry date
             if "expires" in cookie or "max-age" in cookie:
-                expiresDate = re.search("(?<=expires=).*?(?=;)", cookieHeader)
-                if expiresDate is not None:
-                    dt = parser.parse(expiresDate.group(0))
-                    now = datetime.now(timezone.utc)
+                expiresDate = cookieHeader.split("expires=")[1].split(";")[0].strip()
+                dt = datetime.strptime(expiresDate, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
 
-                    if dt > now + timedelta(days=30):
-                        self.Helpers.logWarning(flow, f"Cookie {cookieName}'s expiry date is more than 30 days in the future ({dt - now})", flow.request.url)
+                now = datetime.now(timezone.utc)
+
+                try:
+                    dt = datetime.strptime(expiresDate, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
+                except ValueError:
+                    dt = datetime.strptime(expiresDate, "%a, %d-%b-%Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
+                    
+                if dt > now + timedelta(days=30):
+                    self.Helpers.logWarning(flow, f"Cookie {cookieName}'s expiry date is more than 30 days in the future ({dt - now})", flow.request.url)
+                    
+        
+        # print("COOKIESANALYZER, SET COOKIE: --- %s seconds ---" % (time.time() - start_time))
+        # self.SessionAnalyzer.timings["cookies"]["time"].append(time.time() - start_time)

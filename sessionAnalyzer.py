@@ -14,6 +14,7 @@ from modules.CookiesAnalyzer import CookiesAnalyzer
 from modules.HeadersAnalyzer import HeadersAnalyzer
 from modules.JWTAnalyzer import JWTAnalyzer
 from modules.WebStorageAnalyzer import WebStorageAnalyzer
+import statistics
 from modules.SecretsScanner import SecretsScanner
 
 SERVERSTARTED = False
@@ -29,7 +30,7 @@ class SessionAnalyzer:
         self.HeadersAnalyzer = HeadersAnalyzer(Helpers=self.Helpers, SessionAnalyzer=self)
         self.JWTAnalyzer = JWTAnalyzer(Helpers=self.Helpers, SessionAnalyzer=self)
         self.SecretsScanner = SecretsScanner(Helpers=self.Helpers, SessionAnalyzer=self)
-        self.WebStorageAnalyzer = WebStorageAnalyzer()
+        self.WebStorageAnalyzer = WebStorageAnalyzer(SessionAnalyzer=self)
         
 
     activeGitLeaksProcesses = set()
@@ -39,6 +40,13 @@ class SessionAnalyzer:
         "data": {}
     }
     vulnerabilityServerProcess = None
+    # timings = {
+    #     "cookies": {"time": []},
+    #     "headers": {"time": []},
+    #     "jwt": {"time": []},
+    #     "secrets": {"time": []},
+    #     "webstorage": {"time": []}
+    #     }
     
 
     def load(self, loader: Loader):
@@ -161,7 +169,15 @@ class SessionAnalyzer:
         if elapsed > 0.05: # slower than 50ms
             print(f"SLOW RESPONSE: {flow.request.method} {flow.request.url}")
             print(f"Time: {elapsed * 1000:.1f}ms")
-       
+    
+        # print("")
+        # print(f"REQUESTS ANALYZED: {len(self.timings.get("headers").get("time", 0))}")
+        # print(f"WEBSTORAGE AVERAGE: {statistics.mean(self.timings.get("webstorage").get("time", 0))}")
+        # print(f"JWT AVERAGE: {statistics.mean(self.timings.get("jwt").get("time"))}")
+        # print(f"HEADERS AVERAGE: {statistics.mean(self.timings.get("headers").get("time"))}")
+        # print(f"SECRETS AVERAGE: {statistics.mean(self.timings.get("secrets").get("time"))}")
+        # print(f"COOKIES AVERAGE: {statistics.mean(self.timings.get("cookies").get("time", 0))}")
+
         
 
     def done(self):

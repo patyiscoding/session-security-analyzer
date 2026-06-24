@@ -27,6 +27,8 @@ class JWTAnalyzer:
     jwtsecretswordlist = BASE_DIR / "../third-party/wordlists/jwt-secrets/jwt.secrets.list"
 
     def lookForJWTS(self, flow: http.HTTPFlow):
+        # start_time = time.time()
+
         # From Authorization header
         AUTHORIZATION = flow.request.headers.get("Authorization", "")
         if AUTHORIZATION.startswith("Bearer "):
@@ -49,6 +51,10 @@ class JWTAnalyzer:
             for match in matches:
                 self.Helpers.logVulnerability(flow, f"JWT found in URL: {match}", flow.request.url)
                 self.evaluateJWT(match, flow)
+        
+        # print("JWTANALYZER, LOOKFORJWTS: --- %s seconds ---" % (time.time() - start_time))
+        # self.SessionAnalyzer.timings["jwt"]["time"].append(time.time() - start_time)
+
 
 
     def evaluateJWT(self, JWT, flow):
