@@ -22,10 +22,7 @@ _analyzer_instance = None
 
 class SessionAnalyzer:
     def __init__(self):
-        # Step 1: Create Helpers instance (passes self for circular reference)
         self.Helpers = Helpers(SessionAnalyzer=self)
-        
-        # Step 2: Inject Helpers instance to other modules
         self.CookiesAnalyzer = CookiesAnalyzer(Helpers=self.Helpers, SessionAnalyzer=self)
         self.HeadersAnalyzer = HeadersAnalyzer(Helpers=self.Helpers, SessionAnalyzer=self)
         self.JWTAnalyzer = JWTAnalyzer(Helpers=self.Helpers, SessionAnalyzer=self)

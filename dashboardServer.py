@@ -48,7 +48,6 @@ async def OPTIONSVulnerabilityStream():
 
 @app.get("/health")
 async def health():
-    """Health check endpoint"""
     return JSONResponse({"status": "ok"})
 
 @app.websocket("/vulnerabilityStream")
