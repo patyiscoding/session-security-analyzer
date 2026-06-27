@@ -14,24 +14,6 @@ lastSentState = {}
 connectedClients = set()
 telemetryQueue = Queue()
 
-def deduplicateVulnerabilities(data: dict) -> dict:
-    """Deduplicate vulnerabilities by normalizing URLs in keys.
-    
-    Merges vulnerabilities from URLs that differ only in query parameters.
-    """
-    deduplicated = {}
-    for url, vuln_data in data.items():
-        if url not in deduplicated:
-            deduplicated[url] = vuln_data
-        else:
-            # Merge vulnerability data for duplicate URLs
-            if isinstance(vuln_data, dict) and isinstance(deduplicated[url], dict):
-                deduplicated[url].update(vuln_data)
-            elif isinstance(vuln_data, list) and isinstance(deduplicated[url], list):
-                deduplicated[url].extend(vuln_data)
-    
-    return deduplicated
-
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -69,11 +51,8 @@ async def vulnerabilityStream(websocket: WebSocket):
                 # Extract only the 'data' field if it has the wrapper structure
                 metadata = parsedDataObject.get("metadata", parsedDataObject)
                 data = parsedDataObject.get("data", parsedDataObject)
-             
-                # Deduplicate URLs
-                # currentState = deduplicateVulnerabilities(data)
                 
-                # Calculate delta for this client
+                # Calculate delta
                 allKeys = set(data.keys()) | set(clientState.keys())
                 delta = {}
                 
@@ -117,7 +96,7 @@ async def vulnerabilityStream(websocket: WebSocket):
                 # Queue is empty, continue waiting
                 await asyncio.sleep(0.1)
             except RuntimeError as e:
-                # Handle connection errors (including "close message has been sent")
+                # Handle connection errors
                 if "close message has been sent" in str(e) or "closed" in str(e).lower():
                     print("WebSocket connection closed, exiting loop")
                     break

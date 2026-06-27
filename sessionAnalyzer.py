@@ -1,9 +1,8 @@
 from mitmproxy import http, ctx
 from helpers.log import log
 import json
-from collections import defaultdict
 from dashboardServer import startDashboardServer, telemetryQueue
-from multiprocessing import Process, Queue, current_process
+from multiprocessing import Process, current_process
 from mitmproxy.addonmanager import Loader
 import signal
 import os
@@ -14,7 +13,6 @@ from modules.CookiesAnalyzer import CookiesAnalyzer
 from modules.HeadersAnalyzer import HeadersAnalyzer
 from modules.JWTAnalyzer import JWTAnalyzer
 from modules.WebStorageAnalyzer import WebStorageAnalyzer
-import statistics
 from modules.SecretsScanner import SecretsScanner
 
 SERVERSTARTED = False

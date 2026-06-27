@@ -37,12 +37,15 @@ class SecretsScanner():
         else:
             text = flow.response.get_text(strict=False)
             ct = flow.response.headers.get("Content-Type", "")
-            if (("text/html" in ct or "application/json" in ct or "text/plain" in ct or "text/javascript") and len(text) > 0):
-                pass
-            elif hasattr(flow.response, "path") and str(flow.response.path).endswith(".js"):
-                pass
-            elif ct is None:
-                pass
+
+            contentType = ct.lower() if ct else ""
+
+            isJSPath = hasattr(flow.response, "path") and str(flow.response.path).endswith(".js")
+
+            allowedTypes = ["text/html", "application/json", "text/plain", "text/javascript"]
+
+            if isJSPath or (any(t in contentType for t in allowedTypes) and len(text) > 0) or ct is None:
+                pass 
             else:
                 return
             
@@ -50,9 +53,10 @@ class SecretsScanner():
             log.debug("Contents for secrets scanning are empty")
             return
 
-        if len(text) > 5_000_000:
+        if len(text) > 5_000_000: # around 5MB
             log.warning(f"Skipping secrets scan: response too large ({len(text)/1024/1024:.1f}MB)")
             return
+
 
         self.lookForSecretsWithRegexes(flow, text)
         
