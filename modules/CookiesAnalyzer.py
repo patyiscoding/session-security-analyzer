@@ -50,12 +50,12 @@ class CookiesAnalyzer:
                 if "secure" not in cookie:
                     self.Helpers.logWarning(flow, f"Cookie {cookieName}: Attribute SameSite is set to None but no Secure attribute set.", flow.request.url)
             
-            if "Expires=" in cookie or "expires=" in cookie or "max-age=" in cookie:
-                if "Expires=" in cookie or "max-age=" in cookie:
-                    expiresDate = cookieHeader.split("Expires=")[1].split(";")[0].strip()
-                    
-                if "expires=" in cookie or "max-age=" in cookie:
-                    expiresDate = cookieHeader.split("expires=")[1].split(";")[0].strip()
+            
+            if "expires=" in cookie or "max-age=" in cookie:
+                if len(cookie.split("expires=")) != 2:
+                    return
+                
+                expiresDate = cookie.split("expires=")[1].split(";")[0].strip()
                     
                 now = datetime.now(timezone.utc)
 
@@ -64,8 +64,8 @@ class CookiesAnalyzer:
                 except ValueError:
                     dt = datetime.strptime(expiresDate, "%a, %d-%b-%Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
                     
-                if dt > now + timedelta(days=30):
-                    self.Helpers.logWarning(flow, f"Cookie {cookieName}'s expiry date is more than 30 days in the future ({dt - now})", flow.request.url)
+                if dt > now + timedelta(days=30) or dt <= now:
+                    self.Helpers.logWarning(flow, f"Cookie {cookieName}'s expiry date is in the past or more than 30 days in the future ({dt - now})", flow.request.url)
                     
         
         # print("COOKIESANALYZER, SET COOKIE: --- %s seconds ---" % (time.time() - start_time))

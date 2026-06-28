@@ -12,6 +12,13 @@ The project includes:
 Pre-requisites
 - (optional, for applications to be run over HTTPS) Nginx
 
+# Starting the tool
+`mitmdump -s sessionAnalyzer.py -p 8080 -q --ssl-insecure`
+`mitmdump -s sessionAnalyzer.py -p 8080 -q --set ssl_verify_upstream_trusted_ca=..\unified_bundle.pem --set ssl_verify_upstream_trusted_confdir= --set verify_upstream_cert_hostname=false`
+
+Alternatively, the script can be started with the following command:
+`mitmdump --set confdir=.`
+
 # NGINX
 1. `cd .\nginx`
 2. `start nginx`

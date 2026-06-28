@@ -1,0 +1,8 @@
+scripts:
+  - sessionAnalyzer.py
+
+listen_port: 8080
+quiet: true
+log_level: error
+ssl_verify_upstream_trusted_ca: '..\unified_bundle.pem'
+verify_upstream_cert_hostname: false

@@ -73,11 +73,11 @@ class SessionAnalyzer:
     
     def configure(self, options):
         if "useAttackMode" in options:
-            ctx.log.info(f"Use Attack mode?: {ctx.options.useAttackMode}")
+            log.info(f"Use Attack mode?: {ctx.options.useAttackMode}")
 
     def request(self, flow: http.HTTPFlow):
-        # if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
-        #     return
+        if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
+            return
         
         # Skip WebSocket upgrade requests and CONNECT tunnels (for proxied WebSocket connections)
         if flow.request.method == "CONNECT" or flow.request.headers.get("Upgrade", "").lower() == "websocket":
@@ -88,6 +88,8 @@ class SessionAnalyzer:
         #     return
         
         start = time.perf_counter()
+
+        
 
         if self.WebStorageAnalyzer.webStorageEndpoint in flow.request.url:
             if flow.request.method == "OPTIONS":
@@ -139,18 +141,20 @@ class SessionAnalyzer:
         if elapsed > 0.05: # slower than 50ms
             print(f"SLOW REQUEST: {flow.request.method} {flow.request.url}")
             print(f"Time: {elapsed*1000:.1f}ms")
-
-    
+ 
     def response(self, flow: http.HTTPFlow):
-        # if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
-        #     return
+        if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
+            return
         
         if ":5173" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the response is coming from the dashboard frontend, ignore it
             return
         
         start = time.perf_counter()
 
-  
+        if "Active-Attack" in flow.request.headers.get("X-Attack", ""):
+            self.JWTAnalyzer.evaluateAttackResponse(flow, flow.request.headers.get("X-Attack"))
+            # TODO: add return
+
 
         self.Helpers.printResponse(flow)
 
@@ -158,7 +162,7 @@ class SessionAnalyzer:
         self.HeadersAnalyzer.analyzeHeaders(flow)
         self.WebStorageAnalyzer.analyzeWebStorage(flow)
         self.SecretsScanner.lookForSecrets(flow)
-        self.JWTAnalyzer.lookForJWTS(flow)
+        self.JWTAnalyzer.lookForJWTs(flow)
 
         elapsed = time.perf_counter() - start
         if elapsed > 0.05: # slower than 50ms
@@ -172,8 +176,6 @@ class SessionAnalyzer:
         # print(f"HEADERS AVERAGE: {statistics.mean(self.timings.get("headers").get("time"))}")
         # print(f"SECRETS AVERAGE: {statistics.mean(self.timings.get("secrets").get("time"))}")
         # print(f"COOKIES AVERAGE: {statistics.mean(self.timings.get("cookies").get("time", 0))}")
-
-        
 
     def done(self):
         def force_exit_timeout():
@@ -269,7 +271,7 @@ class SessionAnalyzer:
 
         
         # if flow.request.scheme == "http" and (AUTHORIZATION != "" or flow.request.headers.get("Cookie", "") != ""):
-        #     Helpers.vulnerabilityFound(f'Sensitive data ({flow.request.headers.get("Authorization", "")} {flow.request.headers.get("Cookie", "")}) being sent over the insecure HTTP protocol')
+        #     Helpers.logVulnerability(f'Sensitive data ({flow.request.headers.get("Authorization", "")} {flow.request.headers.get("Cookie", "")}) being sent over the insecure HTTP protocol')
         
        
         

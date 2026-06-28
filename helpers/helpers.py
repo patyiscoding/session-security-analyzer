@@ -1,6 +1,7 @@
 from helpers.log import log
 from dashboardServer import telemetryQueue
 import re
+import http
 import json
 
 class Helpers():
@@ -13,7 +14,24 @@ class Helpers():
     def printResponse(self, flow):
         print("")
         print("") # for newlines before each new request/response log
-        log.metadata(f"[{flow.request.method}] ({flow.response.status_code}) {flow.request.url} {flow.response.headers.get("Content-Type", "")}")
+
+        try:
+            statusText = http.HTTPStatus(flow.response.status_code).phrase
+        except ValueError:
+            statusText = "Unknown"
+        
+        BOLD = "\x1b[1m"
+        BLUE = "\x1b[34m"
+        GREEN = "\x1b[32m"
+        RESET_COLOR = "\x1b[39m"
+        RESET_ALL = "\x1b[0m"
+
+        if(flow.response.status_code == 200):
+            statusCodeString = f"{GREEN}{flow.response.status_code} {statusText}{RESET_COLOR}"
+        else:
+            statusCodeString = f"{BLUE}{flow.response.status_code} {statusText}{RESET_COLOR}"
+
+        log.metadata(f"{BOLD}{flow.request.method} {statusCodeString} {flow.request.url} {flow.response.headers.get('Content-Type', '')}{RESET_ALL}")
 
     def logWarning(self, flow, contents, path):
         Helpers.warnings += 1
