@@ -92,7 +92,7 @@ class JWTAnalyzer:
 
                 for keyword in sensitiveKeywords:
                     if keyword in lowerPayload:
-                        self.Helpers.logWarning(flow, f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(lowerPayload, indent=4)}", flow.request.url)
+                        self.Helpers.logWarning(flow, f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(unverifiedHeader, indent=4)} {json.dumps(lowerPayload, indent=4)}", flow.request.url)
                         
                         if keyword == "role":
                             self.attackClaimChange(flow, JWT, "role", "admin", lowerPayload[keyword])
@@ -139,7 +139,7 @@ class JWTAnalyzer:
         ctx.master.commands.call("replay.client", [attackFlow])
 
 
-    def logHashcatOutput(process):
+    def logHashcatOutput(self, process):
         for line in process.stdout:
             log.hashcat(line.rstrip("\r\n"))
 
@@ -214,8 +214,8 @@ class JWTAnalyzer:
         header64, _, _ = JWT.split(".")
         paddedHeader = header64 + "=" * divmod(len(header64), 4)[1]
         headerJSON = json.loads(base64.urlsafe_b64decode(paddedHeader))
-        if "alg" in headerJSON:
-            log.info("Skipping Hashcat attack due to no 'alg' attribute in JWT header")
+        if headerJSON.get("alg", "") == "":
+            log.info(f"Skipping Hashcat attack due to no 'alg' attribute in JWT header, {json.dumps(headerJSON, indent=4)}")
             return
         
         algAttribute = headerJSON["alg"].lower()
@@ -226,38 +226,38 @@ class JWTAnalyzer:
 
         # with tempfile.NamedTemporaryFile(mode="w", encoding='utf-8', delete=False) as f:
         
-        # with open("jwt.txt", "w", encoding="utf-8") as f:
-        #     f.write(JWT)
+        with open("jwt.txt", "w", encoding="utf-8") as f:
+            f.write(JWT)
 
         try:
             log.info("Starting Hashcat attack")
 
             # TODO: "Status...........: Cracked"
-            process = subprocess.Popen(
-                ["./third-party/hashcat/hashcat.exe", # subprocess executing from root folder
-                    "-a", "1", 
-                    "-m", "16500",
-                    # "../../jwt.txt", # relative to the /third-party/hashcat folder
-                    "-",
-                    "./wordlists/seclists/rockyou.txt", "./wordlists/jwt-secrets/jwt.secrets.list"], # relative to the /third-party/hashcat folder
-                text=True,
-                cwd="./third-party/hashcat",
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                # timeout=120
-            )
+            # Status...........: Exhausted
+            with open("hashcatErrors.log", "w") as error_file:
+                process = subprocess.Popen(
+                    ["./third-party/hashcat/hashcat.exe", # subprocess executing from root folder
+                        "-a", "0", 
+                        "--potfile-disable",
+                        "-m", "16500",
+                        "../../jwt.txt", # relative to the /third-party/hashcat folder
+                        "./wordlists/seclists/rockyou.txt",     
+                        "./wordlists/jwt-secrets/jwt.secrets.list" # relative to the /third-party/hashcat folder
+                    ],
+                    text=True,
+                    cwd="./third-party/hashcat",
+                    stdout=subprocess.PIPE,
+                    stderr=error_file
+                    # timeout=120
+                )
 
-            process.stdin.write(f"{JWT}\n")
-            process.stdin.close()
+            # process.stdin.write(f"{JWT}\n")
+            # process.stdin.close()
 
-            JWTAnalyzer.runningHashcats.append({"isRunning": 1, "process": process}) # 1 for running, 0 for finished
+                JWTAnalyzer.runningHashcats.append({"isRunning": 1, "process": process}) # 1 for running, 0 for finished
 
-            outputThread = threading.Thread(target=self.logHashcatOutput, args=(process,), daemon=True)
-            outputThread.start()
-        except subprocess.TimeoutExpired:
-            log.warning("Hashcat attack timed out after 120s - terminating process")
-            process.kill()
-            process.wait()
+                outputThread = threading.Thread(target=self.logHashcatOutput, args=(process), daemon=True)
+                outputThread = threading.Thread(target=lambda: self.logHashcatOutput(process), daemon=True)
+                outputThread.start()
         except Exception as e:
             log.exception("Hashcat attack failed with exception: ", e)
