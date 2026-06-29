@@ -103,7 +103,7 @@ class SecretsScanner():
             self.SessionAnalyzer.activeGitLeaksProcesses.add(process)
             log.info(f"Active GitLeaks processes: {len(self.SessionAnalyzer.activeGitLeaksProcesses)}")
 
-            # Timeout to prevent hanging indefinitely
+            # timeout to prevent hanging indefinitely
             try:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(input=text.encode('utf-8')),
@@ -121,7 +121,7 @@ class SecretsScanner():
                     for leak in leaks:
                         secretValue = leak.get("Secret", "")
                         if len(secretValue) > 500:
-                            log.info("Skipping match found by SecretsScanner; length too big")
+                            log.info("Skipping match found by SecretsScanner; length is too big")
                             continue
                         
                     self.Helpers.logVulnerability(flow, f"(GitLeaks) Found potentially sensitive string: {json.loads(stdout)}")
@@ -138,6 +138,5 @@ class SecretsScanner():
         except Exception as e:
             log.error(f"GitLeaks scan error: {e}")
         finally:
-            if process:
-                if process in self.SessionAnalyzer.activeGitLeaksProcesses:
+            if process and process in self.SessionAnalyzer.activeGitLeaksProcesses:
                     self.SessionAnalyzer.activeGitLeaksProcesses.remove(process)

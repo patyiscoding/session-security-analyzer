@@ -199,26 +199,20 @@ class SessionAnalyzer:
             except Exception as e:
                 log.error(f"Error joining server process: {e}")
 
-        # Kill all active GitLeaks asyncio subprocesses
+        # kill all active GitLeaks asyncio subprocesses
         if SessionAnalyzer.activeGitLeaksProcesses:
             log.debug("Killing GitLeaks processes")
             for process in list(SessionAnalyzer.activeGitLeaksProcesses):
-                try:
-                    if process.returncode is None:
-                        process.kill()
-                except Exception as e:
-                    log.debug(f"Error killing gitleaks process: {e}")
+                if process.returncode is None:
+                    process.kill()
         
-        # Kill all active Hashcat subprocesses
+        # kill all active Hashcat subprocesses
         for hashcat_entry in self.JWTAnalyzer.runningHashcats:
             if hashcat_entry["isRunning"] == 1:
                 process = hashcat_entry["process"]
-                try:
-                    if process.poll() is None:
-                        process.kill()
-                        process.wait(timeout=1)
-                except Exception as e:
-                    log.debug(f"Error killing hashcat process: {e}")
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=1)
         
         log.info("Shutdown complete, force exiting")
 

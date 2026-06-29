@@ -3,13 +3,9 @@ from helpers.log import log
 import jwt
 import json
 from mitmproxy import http, ctx
-from helpers.helpers import Helpers
 import copy
 import subprocess
-import tempfile
 from pathlib import Path
-import os
-import time
 import re
 import threading
 
@@ -100,7 +96,7 @@ class JWTAnalyzer:
                 # Attack no. 2
                 self.attackWithAlgNone(flow, JWT)
                 # Attack no. 3
-                self.attackWithHashcat(JWT)
+                self.attackWithHashcat(flow, JWT)
         
         except Exception as e:
             log.exception(e)
@@ -138,10 +134,6 @@ class JWTAnalyzer:
         log.info(f"status_code {flow.response.status_code}")
         ctx.master.commands.call("replay.client", [attackFlow])
 
-
-    def logHashcatOutput(self, process):
-        for line in process.stdout:
-            log.hashcat(line.rstrip("\r\n"))
 
      # ATTACK: Replay request with algorithm none
     def attackWithAlgNone(self, flow, JWT):
@@ -207,7 +199,7 @@ class JWTAnalyzer:
             self.Helpers.logVulnerability(attackFlow, f"{message} on {path} ({attackStatus})", path)
 
 
-    def attackWithHashcat(self, JWT):
+    def attackWithHashcat(self, flow, JWT):
         log.debug(f"ATTACK: Checking if Hashcat attack is possible")
 
         # Checking if the header lists a compatible signing algorithm
@@ -224,40 +216,60 @@ class JWTAnalyzer:
             log.info(f"Skipping Hashcat attack due to an incompatible signing algorithm: {algAttribute}")
             return
 
-        # with tempfile.NamedTemporaryFile(mode="w", encoding='utf-8', delete=False) as f:
-        
-        with open("jwt.txt", "w", encoding="utf-8") as f:
-            f.write(JWT)
-
         try:
             log.info("Starting Hashcat attack")
 
-            # TODO: "Status...........: Cracked"
-            # Status...........: Exhausted
             with open("hashcatErrors.log", "w") as error_file:
                 process = subprocess.Popen(
                     ["./third-party/hashcat/hashcat.exe", # subprocess executing from root folder
                         "-a", "0", 
                         "--potfile-disable",
                         "-m", "16500",
-                        "../../jwt.txt", # relative to the /third-party/hashcat folder
-                        "./wordlists/seclists/rockyou.txt",     
-                        "./wordlists/jwt-secrets/jwt.secrets.list" # relative to the /third-party/hashcat folder
+                        # "../../jwt.txt", # relative to the /third-party/hashcat folder
+                        JWT,
+                        "./wordlists/combinedWordlist.txt",  # relative to the /third-party/hashcat folder
                     ],
                     text=True,
                     cwd="./third-party/hashcat",
                     stdout=subprocess.PIPE,
                     stderr=error_file
-                    # timeout=120
                 )
 
-            # process.stdin.write(f"{JWT}\n")
-            # process.stdin.close()
+                # outputThread = threading.Thread(target=lambda: self.logHashcatOutput(process), daemon=True)
+                outputThread = threading.Thread(target=self.runAndLogHashcat, args=(process, flow, JWT), daemon=True)
 
-                JWTAnalyzer.runningHashcats.append({"isRunning": 1, "process": process}) # 1 for running, 0 for finished
+                JWTAnalyzer.runningHashcats.append({"isRunning": 1, "process": process, "threadRef": outputThread}) # 1 = running, 0 = finished
 
-                outputThread = threading.Thread(target=self.logHashcatOutput, args=(process), daemon=True)
-                outputThread = threading.Thread(target=lambda: self.logHashcatOutput(process), daemon=True)
                 outputThread.start()
         except Exception as e:
             log.exception("Hashcat attack failed with exception: ", e)
+
+    def runAndLogHashcat(self, process, flow, JWT):
+        self.logHashcatOutput(process, flow, JWT),
+        self.hashcatFinished(process)
+
+    def logHashcatOutput(self, process, flow, JWT):
+        fullHashcatOutput = ""
+
+        for line in process.stdout:
+            log.hashcat(line.rstrip("\r\n"))
+            fullHashcatOutput += line
+
+            if("Status...........: Cracked" in line):
+                match = re.search(f"(?<={JWT}:)\\S*", fullHashcatOutput)
+                if match:
+                    match = match.group(0)
+                else:
+                    match = ""
+                self.Helpers.logVulnerability(flow, f"JWT secret brute-forced: '{match}'", flow.request.url)
+            elif("Status...........: Exhausted" in line):
+                log.info("Hashcat dictionary attack couldn't find a matching secret")
+
+
+    def hashcatFinished(self, process):
+        for entry in JWTAnalyzer.runningHashcats:
+            if entry["process"] == process:
+                entry["isRunning"] = 0
+                log.debug("Cleaning hashcat process")
+                break
+        

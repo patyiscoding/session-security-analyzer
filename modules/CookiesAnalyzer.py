@@ -27,13 +27,10 @@ class CookiesAnalyzer:
             
             CookiesAnalyzer.cookiesEvaluated.add(cookieHeader)
 
-            # Covering the case insensitive nature of cookie attributes
             cookie = cookieHeader.lower()
-
             cookieName = cookie.split("=")[0].strip()
 
-            # Checking if the cookie is sensitive for context awareness
-            isSensitive = any(sensitiveCookieName in cookie for sensitiveCookieName in ["sess", "auth", "token", "jwt", "id", "user"])
+            isSensitive = any(sensitiveCookieName in cookieName for sensitiveCookieName in ["sess", "auth", "token", "jwt", "id", "user", "admin"])
 
             # HttpOnly, Secure, SameSite
             if "httponly" not in cookie:
@@ -52,6 +49,7 @@ class CookiesAnalyzer:
             
             
             if "expires=" in cookie or "max-age=" in cookie:
+                # TODO: max-age
                 if len(cookie.split("expires=")) != 2:
                     return
                 

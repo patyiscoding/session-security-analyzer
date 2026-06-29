@@ -18,7 +18,7 @@ class HeadersAnalyzer:
         # start_time = time.time()
 
         self.analyzeSTS(flow, headers, path)
-        self.analyzeNoSniff(flow, headers, path)
+        # self.analyzeNoSniff(flow, headers, path)
         self.analyzeCORS(flow, headers, path)
         self.analyzeURL(flow, path)
         # print("HEADERSANALYZER, ANALYZEHEADERS: --- %s seconds ---" % (time.time() - start_time))
@@ -38,14 +38,14 @@ class HeadersAnalyzer:
             else:
                 self.Helpers.logWarning(flow, f"Found Strict-Transport-Security header, but couldn't extract max-age", path)
 
-    def analyzeNoSniff(self, flow, headers, path):
-        XCONTENT = headers.get("X‐Content‐Type‐Options", None)
+    # def analyzeNoSniff(self, flow, headers, path):
+    #     XCONTENT = headers.get("X‐Content‐Type‐Options", None)
 
-        if XCONTENT is None:
-            self.Helpers.logWarning(flow, f"Missing X‐Content‐Type‐Options: no-sniff header", path)
-        else:
-            if "no-sniff" not in XCONTENT:
-                self.Helpers.logWarning(flow, f"X‐Content‐Type‐Options header not set to 'no-sniff' value", path)
+    #     if XCONTENT is None:
+    #         self.Helpers.logWarning(flow, f"Missing X‐Content‐Type‐Options: no-sniff header", path)
+    #     else:
+    #         if "no-sniff" not in XCONTENT:
+    #             self.Helpers.logWarning(flow, f"X‐Content‐Type‐Options header not set to 'no-sniff' value", path)
 
     def analyzeCORS(self, flow, responseHeaders, path):
         CORSCredentials = responseHeaders.get("Access-Control-Allow-Credentials")
@@ -56,5 +56,5 @@ class HeadersAnalyzer:
                 self.Helpers.logWarning(flow, f"Access-Control-Allow-Credentials header set to 'true', but Access-Control-Allow-Origin set to. Any origin is allowed to access the resource.", path)
     
     def analyzeURL(self, flow, path):
-        if any(param in flow.request.url.lower() for param in ["sid=", "session_id=", "token="]):
+        if any(param in flow.request.url.lower() for param in ["sid=", "session_id=", "token=", "jwt=", "sessionid="]):
             self.Helpers.logWarning(flow, "Potential Session Fixation risk due to a session token found in URL", path)
