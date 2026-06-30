@@ -184,9 +184,9 @@ class JWTAnalyzer:
         if attackStatus in [401, 403, 500]:
             match attackHeader:
                 case "Active-Attack-AlgNone":
-                    message = "rejected 'alg: none' signature bypass"
+                    message = "Rejected 'alg: none' signature bypass"
                 case "Active-Attack-Claim":
-                    message = "rejected claim change"
+                    message = "Rejected claim change"
                     
             log.info(f"Server successfully {message} on {path} ({attackStatus})")
         elif attackStatus == 200 or attackStatus == originalStatus:
@@ -194,9 +194,9 @@ class JWTAnalyzer:
                 case "Active-Attack-AlgNone":
                     message = "'alg: none' signature accepted"
                 case "Active-Attack-Claim":
-                    message = "role claim change accepted"
+                    message = "Role claim change accepted"
 
-            self.Helpers.logVulnerability(attackFlow, f"{message} on {path} ({attackStatus})", path)
+            self.Helpers.logVulnerability(attackFlow, f"{message}", path)
 
 
     def attackWithHashcat(self, flow, JWT):

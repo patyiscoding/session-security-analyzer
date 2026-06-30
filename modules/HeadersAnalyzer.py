@@ -53,7 +53,7 @@ class HeadersAnalyzer:
             incomingOrigin = flow.request.headers.get('Origin')
             CORSOrigin = responseHeaders.get("Access-Control-Allow-Origin", "")
             if CORSOrigin == "*" or CORSOrigin == incomingOrigin:
-                self.Helpers.logWarning(flow, f"Access-Control-Allow-Credentials header set to 'true', but Access-Control-Allow-Origin set to. Any origin is allowed to access the resource.", path)
+                self.Helpers.logWarning(flow, f"Access-Control-Allow-Credentials header set to 'true', but Access-Control-Allow-Origin set to *. Any origin is allowed to access the resource.", path)
     
     def analyzeURL(self, flow, path):
         if any(param in flow.request.url.lower() for param in ["sid=", "session_id=", "token=", "jwt=", "sessionid="]):

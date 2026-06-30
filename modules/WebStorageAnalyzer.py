@@ -11,12 +11,31 @@ class WebStorageAnalyzer:
     webStorageEndpoint = "webStorageDump"
     lastWebStorageDump = None
 
+    def isHTMLResponse(self, flow):
+        if "text/html" in flow.response.headers.get("Content-Type", ""):
+            return True
+
+        bytes = flow.response.raw_content
+        
+        if bytes:
+            strippedBytes = bytes.lstrip()[:50].lower()
+            
+            if (
+                strippedBytes.startswith(b"<!--") or 
+                strippedBytes.startswith(b"<!doctype html") or 
+                strippedBytes.startswith(b"<html") or 
+                strippedBytes.startswith(b"<head") or 
+                strippedBytes.startswith(b"<body")
+            ):
+                return True
+        return False
+
     def analyzeWebStorage(self, flow):
         # start_time = time.time()
 
-        log.debug("EVALUATING WEB STORAGE")
-        if flow.response and "text/html" in flow.response.headers.get("Content-Type", ""):
-
+        log.debug(f"EVALUATING WEB STORAGE {self.isHTMLResponse(flow)}")
+        if flow.response and self.isHTMLResponse(flow):
+            log.debug("INJECTING")
             HTML = flow.response.text
             
             if len(HTML) > 10_000_000:  # >10MB

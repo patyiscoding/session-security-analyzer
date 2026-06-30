@@ -11,6 +11,7 @@ from pathlib import Path
 import asyncio
 import os
 import time
+import uuid
 
 class SecretsScanner():
     def __init__(self, Helpers, SessionAnalyzer):
@@ -82,19 +83,21 @@ class SecretsScanner():
         
         if len(matches) > 0:
             for match in matches:
-                if len(match) > 500:
+                if len(match) > 700:
                     log.info("Skipping match found by SecretsScanner; length too big")
                     continue
                 self.Helpers.logVulnerability(flow, f"Found potentially sensitive string: {match}", flow.request.url)
+        log.debug(f"Finished regex secrets scan with {len(matches)} matches")
 
 
     async def lookForSecretsWithGitLeaks(self, flow, text):
         process = None
         try:
             log.debug("Starting GitLeaks secrets scan")
+            reportPath = f"gitleaks_{uuid.uuid4().hex}.json"
 
             process = await asyncio.create_subprocess_exec(
-                "./third-party/gitleaks.exe", "stdin", "-f", "json",
+                "./third-party/gitleaks.exe", "stdin", "--report-format=json", f"--report-path={reportPath}",
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
@@ -105,7 +108,7 @@ class SecretsScanner():
 
             # timeout to prevent hanging indefinitely
             try:
-                stdout, stderr = await asyncio.wait_for(
+                await asyncio.wait_for(
                     process.communicate(input=text.encode('utf-8')),
                     timeout=10.0
                 )
@@ -115,18 +118,18 @@ class SecretsScanner():
                 await process.wait()
                 return
 
-            if stdout.strip():
-                try:
-                    leaks = json.loads(stdout)
-                    for leak in leaks:
-                        secretValue = leak.get("Secret", "")
-                        if len(secretValue) > 500:
-                            log.info("Skipping match found by SecretsScanner; length is too big")
-                            continue
-                        
-                    self.Helpers.logVulnerability(flow, f"(GitLeaks) Found potentially sensitive string: {json.loads(stdout)}")
-                except json.JSONDecodeError:
-                    log.error("Failed to parse GitLeaks output JSON")
+            if not os.path.exists(reportPath):
+                return
+            
+            with open(reportPath, "r", encoding="utf-8") as f:
+                leaks = json.load(f)
+
+                for leak in leaks:
+                    secretValue = leak.get("Secret", "")
+                    description = leak.get("Description", "")
+                    
+                    self.Helpers.logVulnerability(flow, f"(GitLeaks) {description} {secretValue}", flow.request.url)
+              
         except asyncio.CancelledError:
             log.debug("GitLeaks scan cancelled")
             if process and process.returncode is None:
@@ -140,3 +143,8 @@ class SecretsScanner():
         finally:
             if process and process in self.SessionAnalyzer.activeGitLeaksProcesses:
                     self.SessionAnalyzer.activeGitLeaksProcesses.remove(process)
+            try:
+                if os.path.exists(reportPath):
+                    os.remove(reportPath)
+            except OSError:
+                pass

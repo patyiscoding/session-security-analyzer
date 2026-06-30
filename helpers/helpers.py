@@ -1,5 +1,5 @@
 from helpers.log import log
-from dashboardServer import telemetryQueue
+from dashboardServer import vulnerabilityQueue
 import re
 import http
 import json
@@ -80,8 +80,18 @@ class Helpers():
             "contents": convertedContents, 
             "url": url,
             "severity": "unknown",
-            "request": flow.request.get_text(strict=False).replace("\"", "'"),
-            "response": flow.response.get_text(strict=False).replace("\"", "'")
+            "request": {    
+                            "method": flow.request.method,
+                            "statusCode": "",
+                            "contents": flow.request.get_text(strict=False).replace("\"", "'"),
+                            "headers": dict(flow.request.headers.items())
+                        },
+            "response": {
+                            "statusCode": flow.response.status_code,
+                            "contents": flow.response.get_text(strict=False).replace("\"", "'"),
+                            "headers": dict(flow.request.headers.items())
+                        }
+
         }
 
         if currentNode.get(lastToken) is None:
@@ -97,4 +107,4 @@ class Helpers():
         else:
             currentNode[lastToken] = [leaf]
 
-        telemetryQueue.put(json.dumps(self.SessionAnalyzer.vulnerabilityScanResultsJSON))
+        vulnerabilityQueue.put(json.dumps(self.SessionAnalyzer.vulnerabilityScanResultsJSON))

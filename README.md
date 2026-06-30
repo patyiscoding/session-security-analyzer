@@ -36,6 +36,12 @@ Alternatively, the script can be started with the following command:
 2. Go to http://localhost:2000
 
 ## OWASP JuiceShop
+1. `docker pull bkimminich/juice-shop`
+2. `docker run -p 127.0.0.1:3000:3000 bkimminich/juice-shop`
+3. Go to http://localhost:3000
+
+or 
+
 1. `cd .\vulnerable-applications\JuiceShop`
 2. `npm start`
 3. Go to http://localhost:3000
@@ -46,16 +52,15 @@ Alternatively, the script can be started with the following command:
 3. `docker run -p 4000:4000 jwt-lab`
 4. Go to http://localhost:4000
 
-## Vulnerable-JWT
+<!-- ## Vulnerable-JWT
 1. `cd .\vulnerable-applications\Vulnerable-JWT`
 2. `npm install`
 3. `node app.js`
-4. Go to http://localhost:5000
+4. Go to http://localhost:5000 -->
+
+## WebGoat
+1. `docker run -p 127.0.0.1:8080:8080 -p 127.0.0.1:9090:9090 -e TZ=Europe/Amsterdam webgoat/webgoat`
+2. Go to `http://localhost:8080`
 
 
 
-
-
-<!-- ## WebGoat
-`docker run -p 127.0.0.1:8080:8080 -p 127.0.0.1:9090:9090 -e TZ=Europe/Amsterdam webgoat/webgoat`
-Go to `http://localhost:8080` -->
