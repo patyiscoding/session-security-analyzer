@@ -33,76 +33,106 @@ class WebStorageAnalyzer:
     def analyzeWebStorage(self, flow):
         # start_time = time.time()
 
-        log.debug(f"EVALUATING WEB STORAGE {self.isHTMLResponse(flow)}")
+        log.debug(f"EVALUATING WEB STORAGE {{self.isHTMLResponse(flow)}}")
         if flow.response and self.isHTMLResponse(flow):
             log.debug("INJECTING")
             HTML = flow.response.text
             
             if len(HTML) > 10_000_000:  # >10MB
-                log.warning(f"Skipping Web Storage analysis: HTML too large ({len(HTML)/1024/1024:.1f}MB)")
+                log.warning(f"Skipping Web Storage analysis: HTML too large ({{len(HTML)/1024/1024:.1f}}MB)")
                 return
                 
             JSPayload = f"""
                 <script type="module">
-                    let webStorageData = {{
-                        'localStorage': {{}}, 
-                        'sessionStorage': {{}}, 
-                        'indexedDB': {{}}
-                    }}
+                    (async () => {{
+                        let webStorageData = {{
+                                                'localStorage': {{}}, 
+                                                'sessionStorage': {{}}, 
+                                                'indexedDB': {{}}
+                                            }}
 
-                    if(localStorage.length > 0){{
-                        for (let i = 0; i < localStorage.length; i++) {{
-                            let key = localStorage.key(i);
-                            webStorageData['localStorage'][key] = localStorage.getItem(key);
-                        }}}}
-
-
-                    if(sessionStorage.length > 0){{
-                        for (let i = 0; i < sessionStorage.length; i++) {{
-                            let key = sessionStorage.key(i);
-                            webStorageData['sessionStorage'][key] = sessionStorage.getItem(key);
-                        }}
-                    }}
-
-                    const dbs = await indexedDB.databases();
-
-                    for (const dbInfo of dbs) {{
-                            console.log("DB:", dbInfo.name);
-
-                            const request = indexedDB.open(dbInfo.name);
-
-                            request.onsuccess = (event) => {{
-                                const db = event.target.result;
-                                const storeNames = Array.from(db.objectStoreNames);
-
-                                webStorageData['indexedDB'][dbInfo.name] = {{}};
-                                
-                                for (const storeName of storeNames) {{
-                                    const getAll = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
-                                    getAll.onsuccess = () => {{
-                                        webStorageData['indexedDB'][dbInfo.name][storeName] = getAll.result
-                                    }}
-                                }}   
-                            }};
-
-                            request.onerror = function(event){{
-                                console.log("Database not created " + event.target.errorCode);
+                        if(localStorage.length > 0){{
+                            for (let i = 0; i < localStorage.length; i++) {{
+                                let key = localStorage.key(i);
+                                webStorageData['localStorage'][key] = localStorage.getItem(key);
                             }}
                         }}
 
-                    fetch("http://127.0.0.1:8080/webStorageDump", {{
-                            method: 'POST',
-                            headers: {{ 'Content-Type': 'application/json' }},
-                            body: JSON.stringify(webStorageData)
-                        }}).catch(err => console.error("Mitmproxy telemetry failure:", err));
+
+                        if(sessionStorage.length > 0){{
+                            for (let i = 0; i < sessionStorage.length; i++) {{
+                                let key = sessionStorage.key(i);
+                                webStorageData['sessionStorage'][key] = sessionStorage.getItem(key);
+                            }}
+                        }}
+
+                        const dbs = await indexedDB.databases();
+
+                        const dbPromises = dbs.map(dbInfo => {{
+                                return new Promise((resolveDb) => {{
+                                    const request = indexedDB.open(dbInfo.name);
+
+                                    request.onsuccess = (event) => {{
+                                        const db = event.target.result;
+                                        const storeNames = Array.from(db.objectStoreNames);
+                                        
+                                        if (storeNames.length === 0) {{
+                                            db.close();
+                                            return resolveDb();
+                                        }}
+
+                                        webStorageData['indexedDB'][dbInfo.name] = {{}};
+                                        
+                                        const storePromises = storeNames.map(storeName => {{
+                                            return new Promise((resolveStore) => {{
+                                                try {{
+                                                    const transaction = db.transaction(storeName, 'readonly');
+                                                    const store = transaction.objectStore(storeName);
+                                                    const getAll = store.getAll();
+
+                                                    getAll.onsuccess = () => {{
+                                                        webStorageData['indexedDB'][dbInfo.name][storeName] = getAll.result;
+                                                        resolveStore();
+                                                    }};
+
+                                                    getAll.onerror = () => {{
+                                                        resolveStore();
+                                                    }};
+                                                }} catch (e) {{
+                                                    resolveStore();
+                                                }}
+                                            }});
+                                        }});
+
+                                        Promise.all(storePromises).then(() => {{
+                                            db.close();
+                                            resolveDb();
+                                        }});
+                                    }};
+
+                                    request.onerror = () => {{
+                                        resolveDb();
+                                    }};
+                                }});
+                            }});
+
+                        await Promise.all(dbPromises);
+
+                        fetch("http://127.0.0.1:8080/webStorageDump", {{
+                                method: 'POST',
+                                headers: {{ 'Content-Type': 'application/json' }},
+                                body: JSON.stringify(webStorageData)
+                        }}).catch(err => console.error("WebStorageDump failure:", err))
+
+                    }})();
                 </script>"""
             
             if "<head>" in HTML:
                 modified = HTML.replace("<head>", f"<head>\n{JSPayload}", 1)
                 flow.response.set_text(modified)
-                log.info(f"Injected web storage script at path {flow.request.url}")
+                log.info(f"Injected web storage script at path {{flow.request.url}}")
             else:
-                log.info(f"Failed to inject web storage script at path {flow.request.url}. No <head> tag.")
+                log.info(f"Failed to inject web storage script at path {{flow.request.url}}. No <head> tag.")
         
         # print("WEBSTORAGEANALYZER, ANALYZEWEBSTORAGE: --- %s seconds ---" % (time.time() - start_time))
         # self.SessionAnalyzer.timings["webstorage"]["time"].append(time.time() - start_time)

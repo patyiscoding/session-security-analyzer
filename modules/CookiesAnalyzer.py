@@ -44,8 +44,7 @@ class CookiesAnalyzer:
                     self.Helpers.logWarning(flow, f"Cookie {cookieName}: No Secure attribute found. This cookie will be sent over unencrypted connections!", flow.request.url)
             
             if "samesite=none" in cookie:
-                if "secure" not in cookie:
-                    self.Helpers.logWarning(flow, f"Cookie {cookieName}: Attribute SameSite is set to None but no Secure attribute set.", flow.request.url)
+                self.Helpers.logWarning(flow, f"Cookie {cookieName}: Attribute SameSite is set to None. This cookie will be sent in all cross-origin contexts", flow.request.url)
             
             
             if "expires=" in cookie or "max-age=" in cookie:

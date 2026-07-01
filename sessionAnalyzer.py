@@ -1,7 +1,7 @@
 from mitmproxy import http, ctx
 from helpers.log import log
 import json
-from dashboardServer import startDashboardServer, telemetryQueue
+from dashboardServer import startDashboardServer, vulnerabilityQueue
 from multiprocessing import Process, current_process
 from mitmproxy.addonmanager import Loader
 import signal
@@ -56,7 +56,7 @@ class SessionAnalyzer:
         )
 
         if current_process().name == 'MainProcess' and not SERVERSTARTED:
-            SessionAnalyzer.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(telemetryQueue,))
+            SessionAnalyzer.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(vulnerabilityQueue,))
             SessionAnalyzer.vulnerabilityServerProcess.start()
             SERVERSTARTED = True
             log.info("Vulnerability Dashboard Server started on http://localhost:9998")
@@ -89,7 +89,15 @@ class SessionAnalyzer:
         
         start = time.perf_counter()
 
-        
+        if "If-None-Match" in flow.request.headers:
+            del flow.request.headers["If-None-Match"]
+            
+        if "If-Modified-Since" in flow.request.headers:
+            del flow.request.headers["If-Modified-Since"]
+            
+        flow.request.headers["Cache-Control"] = "no-cache"
+        flow.request.headers["Pragma"] = "no-cache"
+
 
         if self.WebStorageAnalyzer.webStorageEndpoint in flow.request.url:
             if flow.request.method == "OPTIONS":
@@ -129,7 +137,7 @@ class SessionAnalyzer:
                         return
 
                     for webStorageType in jsonParsed:
-                        log.debug(f"EVALUATING {webStorageType}")
+                        log.debug(f"Evaluating Web Storage Type {webStorageType}")
                         
                         webStorageDumpItem = json.dumps(dict(jsonParsed[webStorageType].items()))
                         self.SecretsScanner.lookForSecrets(flow, webStorageDumpItem)
@@ -183,8 +191,8 @@ class SessionAnalyzer:
             log.warning("Force exiting")
             os._exit(1)
         
-        failsafe_thread = threading.Thread(target=force_exit_timeout, daemon=True)
-        failsafe_thread.start()
+        failsafeThread = threading.Thread(target=force_exit_timeout, daemon=True)
+        failsafeThread.start()
         
         for task in list(SessionAnalyzer.activeTasks):
             if not task.done():
@@ -199,7 +207,7 @@ class SessionAnalyzer:
             except Exception as e:
                 log.error(f"Error joining server process: {e}")
 
-        # kill all active GitLeaks asyncio subprocesses
+        # kill all active GitLeaks subprocesses
         if SessionAnalyzer.activeGitLeaksProcesses:
             log.debug("Killing GitLeaks processes")
             for process in list(SessionAnalyzer.activeGitLeaksProcesses):

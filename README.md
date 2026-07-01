@@ -27,17 +27,16 @@ Alternatively, the script can be started with the following command:
 # Applications
 ## DVNA
 1. `cd .\vulnerable-applications\dvna`
-2. `docker run --name dvna -p 1000:1000 -d appsecco/dvna:sqlite`
-3. Go to http://localhost:1000
-
+2. `docker run --name dvna -p 1000:9090 -d appsecco/dvna:sqlite`
+3. Go to http://localhost:9090
 
 ## OWASP Wrong Secrets
-1. `docker run -p 2000:2000 -p 2010:2010 jeroenwillemsen/wrongsecrets:latest-no-vault`
+1. `docker run -d -p 2000:8080 -p 2001:8090 jeroenwillemsen/wrongsecrets:latest-no-vault`
 2. Go to http://localhost:2000
 
 ## OWASP JuiceShop
 1. `docker pull bkimminich/juice-shop`
-2. `docker run -p 127.0.0.1:3000:3000 bkimminich/juice-shop`
+2. `docker run -d -p 127.0.0.1:3000:3000 bkimminich/juice-shop`
 3. Go to http://localhost:3000
 
 or 
@@ -49,7 +48,7 @@ or
 ## Realistic Vulnerable Web Application
 1. `cd .\vulnerable-applications\vuln-jwt-lab`
 2. `docker build -t jwt-lab .`
-3. `docker run -p 4000:4000 jwt-lab`
+3. `docker run -d -p 4000:4000 jwt-lab`
 4. Go to http://localhost:4000
 
 <!-- ## Vulnerable-JWT
@@ -58,9 +57,15 @@ or
 3. `node app.js`
 4. Go to http://localhost:5000 -->
 
+1. `cd .\Vulnerable-Testing-App`
+2. `docker build -t vuln-testing-app .`
+3. `docker run -d -p 5000:5000 --name running-vuln-app vuln-storage-app`
+4. Go to http://localhost:5000
+
 ## WebGoat
-1. `docker run -p 127.0.0.1:8080:8080 -p 127.0.0.1:9090:9090 -e TZ=Europe/Amsterdam webgoat/webgoat`
-2. Go to `http://localhost:8080`
+<!-- must run on 8080 -->
+1. `docker run -it -p 127.0.0.1:7000:8080 -p 127.0.0.1:7001:9090 webgoat/webgoat`
+2. Go to `http://localhost:7000/WebGoat`
 
 
 
