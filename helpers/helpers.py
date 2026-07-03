@@ -58,7 +58,7 @@ class Helpers():
                 parts.append(p)
 
         currentNode = self.SessionAnalyzer.vulnerabilityScanResultsJSON["data"].setdefault(parts[0], {})
-        # backupCopy = copy.deepcopy(self.SessionAnalyzer.vulnerabilityScanResultsJSON["data"].setdefault(parts[0], {}))
+        # backupCopy = copy.deepcopy(self.SessionAnalyzer.vulnerabilityScanResultsJSON["data"])
 
         for token in parts[1:-1]:
             if token not in currentNode:
@@ -91,24 +91,20 @@ class Helpers():
                         }
         }
 
-        if currentNode.get(lastToken) is None:
-            currentNode[lastToken] = [leaf]
-        
-        if isinstance(currentNode[lastToken], list):
-            doesLeafExistAlready = any(leaf.get("contents", "") == convertedContents for leaf in currentNode[lastToken])
-        
-            if doesLeafExistAlready:
-                log.debug(f"Skipped adding a {level} due to a duplicate")
-                # self.SessionAnalyzer.vulnerabilityScanResultsJSON["data"] = backupCopy
-                return
+        if lastToken not in currentNode or not isinstance(currentNode[lastToken], list):
+            currentNode[lastToken] = []
 
-            currentNode[lastToken].append(leaf)
-        else:
-            currentNode[lastToken] = [leaf]
+        doesLeafExistAlready = any(l.get("contents", "") == convertedContents for l in currentNode[lastToken])
+    
+        if doesLeafExistAlready:
+            log.debug(f"Skipped adding a {level} due to a duplicate")
+            return
 
-        if(level == "Warning"):
+        currentNode[lastToken].append(leaf)
+
+        if level == "Warning":
             self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"] += 1
-        elif(level == "Vulnerability"):
+        elif level == "Vulnerability":
             self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"] += 1
         else:
             return
