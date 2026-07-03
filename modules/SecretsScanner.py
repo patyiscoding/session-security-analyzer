@@ -43,7 +43,7 @@ class SecretsScanner():
 
             isJSPath = hasattr(flow.response, "path") and str(flow.response.path).endswith(".js")
 
-            allowedTypes = ["text/html", "application/json", "text/plain", "text/javascript"]
+            allowedTypes = ["text/html", "application/json", "text/plain", "text/javascript", "application/javascript"]
 
             if isJSPath or (any(t in contentType for t in allowedTypes) and len(text) > 0) or ct is None:
                 pass 

@@ -16,7 +16,7 @@ from modules.WebStorageAnalyzer import WebStorageAnalyzer
 from modules.SecretsScanner import SecretsScanner
 
 SERVERSTARTED = False
-_analyzer_instance = None
+analyzerInstance = None
 
 class SessionAnalyzer:
     def __init__(self):
@@ -31,7 +31,7 @@ class SessionAnalyzer:
     activeGitLeaksProcesses = set()
     activeTasks = set()
     vulnerabilityScanResultsJSON = {
-        "metadata": {},
+        "metadata": {"warnings": 0, "vulnerabilities": 0},
         "data": {}
     }
     vulnerabilityServerProcess = None
@@ -45,8 +45,8 @@ class SessionAnalyzer:
     
 
     def load(self, loader: Loader):
-        global SERVERSTARTED, _analyzer_instance
-        _analyzer_instance = self
+        global SERVERSTARTED, analyzerInstance
+        analyzerInstance = self
 
         loader.add_option(
             name="useAttackMode",
@@ -59,13 +59,13 @@ class SessionAnalyzer:
             SessionAnalyzer.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(vulnerabilityQueue,))
             SessionAnalyzer.vulnerabilityServerProcess.start()
             SERVERSTARTED = True
-            log.info("Vulnerability Dashboard Server started on http://localhost:9998")
+            log.info("Vulnerability Dashboard Server started on http://localhost:9999")
 
         try:
             def signal_handler(signum, frame):
                 log.info("Received interrupt signal, shutting down...")
-                if _analyzer_instance:
-                    _analyzer_instance.done()
+                if analyzerInstance:
+                    analyzerInstance.done()
             
             signal.signal(signal.SIGINT, signal_handler)
         except Exception as e:
@@ -79,13 +79,13 @@ class SessionAnalyzer:
         if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
             return
         
-        # Skip WebSocket upgrade requests and CONNECT tunnels (for proxied WebSocket connections)
+        # skip WebSocket upgrade requests and CONNECT tunnels
         if flow.request.method == "CONNECT" or flow.request.headers.get("Upgrade", "").lower() == "websocket":
             log.debug(f"Skipping {flow.request.method} request to {flow.request.url}")
             return
         
-        # if ":5173" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the request is coming from the dashboard frontend, ignore it
-        #     return
+        if ":5174" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the request is coming from the dashboard frontend, ignore it
+            return
         
         start = time.perf_counter()
 
@@ -154,7 +154,7 @@ class SessionAnalyzer:
         if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
             return
         
-        if ":5173" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the response is coming from the dashboard frontend, ignore it
+        if ":5174" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the response is coming from the dashboard frontend, ignore it
             return
         
         start = time.perf_counter()

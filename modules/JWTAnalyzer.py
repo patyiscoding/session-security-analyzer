@@ -32,15 +32,15 @@ class JWTAnalyzer:
             self.evaluateJWT(AUTHORIZATION.split(" ")[1], flow)
 
         # From Cookie header
-        matches = re.findall("token=((?:[a-zA-Z0-9_-]+\\.){2}[a-zA-Z0-9_-]+)", flow.request.headers.get("Cookie", ""))
+        matches = re.findall(r"token=((?:[a-zA-Z0-9_-]+\.){2}[a-zA-Z0-9_-]+)", flow.request.headers.get("Cookie", ""))
         if len(matches) != 0 and matches[0] is not None:
             log.debug("Evaluating JWT from the Cookie header")
             for match in matches:
                 self.evaluateJWT(match, flow)
 
         # From URL
-        matches = re.findall("token=((?:[a-zA-Z0-9_-]+\\.){2}[a-zA-Z0-9_-]+)", flow.request.url)
-        matches.extend(re.findall("jwt=((?:[a-zA-Z0-9_-]+\\.){2}[a-zA-Z0-9_-]+)", flow.request.url))
+        matches = re.findall(r"token=((?:[a-zA-Z0-9_-]+\.){2}[a-zA-Z0-9_-]+)", flow.request.url)
+        matches.extend(re.findall(r"jwt=((?:[a-zA-Z0-9_-]+\.){2}[a-zA-Z0-9_-]+)", flow.request.url))
 
         if len(matches) != 0 and matches[0] is not None:
             log.debug("Evaluating JWT from the URL")
@@ -54,6 +54,7 @@ class JWTAnalyzer:
 
 
     def evaluateJWT(self, JWT, flow):
+        log.info("EVALUATING JWT")
         if JWT in JWTAnalyzer.discoveredJWTs:
             return
         
@@ -221,13 +222,12 @@ class JWTAnalyzer:
 
             with open("hashcatErrors.log", "w") as error_file:
                 process = subprocess.Popen(
-                    ["./third-party/hashcat/hashcat.exe", # subprocess executing from root folder
+                    ["./third-party/hashcat/hashcat.exe", # subprocess executing from root folder /third-party/hashcat/
                         "-a", "0", 
                         "--potfile-disable",
                         "-m", "16500",
-                        # "../../jwt.txt", # relative to the /third-party/hashcat folder
                         JWT,
-                        "./wordlists/combinedWordlist.txt",  # relative to the /third-party/hashcat folder
+                        "./wordlists/combinedWordlist.txt"  # relative to the /third-party/hashcat folder
                     ],
                     text=True,
                     cwd="./third-party/hashcat",

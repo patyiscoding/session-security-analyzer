@@ -112,4 +112,4 @@ async def vulnerabilityStream(websocket: WebSocket):
 def startDashboardServer(queueInstance):
     global vulnerabilityQueue
     vulnerabilityQueue = queueInstance
-    uvicorn.run(app, host="0.0.0.0", port=9998, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=9999, log_level="warning")

@@ -2,6 +2,7 @@ from helpers.log import log
 from dashboardServer import vulnerabilityQueue
 import re
 import http
+import copy
 import json
 
 class Helpers():
@@ -34,12 +35,10 @@ class Helpers():
         log.metadata(f"{BOLD}{flow.request.method} {statusCodeString} {flow.request.url} {flow.response.headers.get('Content-Type', '')}{RESET_ALL}")
 
     def logWarning(self, flow, contents, path):
-        Helpers.warnings += 1
         self.addToResults(flow, contents, path, "Warning")
-        log.warning(contents)
+        log.warning(f"{contents} at path {path}")
     
     def logVulnerability(self, flow, contents, path):
-        Helpers.vulnerabilities += 1
         self.addToResults(flow, contents, path, "Vulnerability")
         log.critical(f"POTENTIAL VULNERABILITY FOUND: {contents} at path {path}")
 
@@ -59,8 +58,7 @@ class Helpers():
                 parts.append(p)
 
         currentNode = self.SessionAnalyzer.vulnerabilityScanResultsJSON["data"].setdefault(parts[0], {})
-        self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"] = Helpers.vulnerabilities
-        self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"] = Helpers.warnings
+        # backupCopy = copy.deepcopy(self.SessionAnalyzer.vulnerabilityScanResultsJSON["data"].setdefault(parts[0], {}))
 
         for token in parts[1:-1]:
             if token not in currentNode:
@@ -73,7 +71,7 @@ class Helpers():
 
         lastToken = parts[-1] if len(parts) > 1 else "/" 
 
-        convertedContents = contents.encode('ascii','ignore').decode('ascii') # convert Unicode characters
+        convertedContents = contents.encode('ascii', 'ignore').decode('ascii') # convert Unicode characters
 
         leaf = {
             "level": level,
@@ -91,20 +89,34 @@ class Helpers():
                             "contents": flow.response.get_text(strict=False).replace("\"", "'"),
                             "headers": dict(flow.request.headers.items())
                         }
-
         }
 
         if currentNode.get(lastToken) is None:
             currentNode[lastToken] = [leaf]
+        
         if isinstance(currentNode[lastToken], list):
             doesLeafExistAlready = any(leaf.get("contents", "") == convertedContents for leaf in currentNode[lastToken])
         
             if doesLeafExistAlready:
                 log.debug(f"Skipped adding a {level} due to a duplicate")
+                # self.SessionAnalyzer.vulnerabilityScanResultsJSON["data"] = backupCopy
                 return
 
             currentNode[lastToken].append(leaf)
         else:
             currentNode[lastToken] = [leaf]
+
+        if(level == "Warning"):
+            self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"] += 1
+        elif(level == "Vulnerability"):
+            self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"] += 1
+        else:
+            return
+
+        # self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"] = Helpers.vulnerabilities
+        # self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"] = Helpers.warnings
+
+        # log.info(json.dumps(self.SessionAnalyzer.vulnerabilityScanResultsJSON))
+        log.info(f"ADDITION {convertedContents}, warnings: {self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"]}, vulns: {self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"]}")
 
         vulnerabilityQueue.put(json.dumps(self.SessionAnalyzer.vulnerabilityScanResultsJSON))
