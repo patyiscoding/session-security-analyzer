@@ -8,9 +8,6 @@ import json
 class Helpers():
     def __init__(self, SessionAnalyzer):
         self.SessionAnalyzer = SessionAnalyzer
-    
-    vulnerabilities = 0
-    warnings = 0
 
     def printResponse(self, flow):
         print("")
@@ -58,7 +55,6 @@ class Helpers():
                 parts.append(p)
 
         currentNode = self.SessionAnalyzer.vulnerabilityScanResultsJSON["data"].setdefault(parts[0], {})
-        # backupCopy = copy.deepcopy(self.SessionAnalyzer.vulnerabilityScanResultsJSON["data"])
 
         for token in parts[1:-1]:
             if token not in currentNode:
@@ -109,10 +105,6 @@ class Helpers():
         else:
             return
 
-        # self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"] = Helpers.vulnerabilities
-        # self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"] = Helpers.warnings
-
-        # log.info(json.dumps(self.SessionAnalyzer.vulnerabilityScanResultsJSON))
         log.info(f"ADDITION {convertedContents}, warnings: {self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"]}, vulns: {self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"]}")
 
         vulnerabilityQueue.put(json.dumps(self.SessionAnalyzer.vulnerabilityScanResultsJSON))
