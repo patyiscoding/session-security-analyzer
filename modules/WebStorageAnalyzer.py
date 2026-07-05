@@ -33,9 +33,9 @@ class WebStorageAnalyzer:
     def analyzeWebStorage(self, flow):
         # start_time = time.time()
 
-        log.debug(f"EVALUATING WEB STORAGE {{self.isHTMLResponse(flow)}}")
+        log.debug(f"EVALUATING WEB STORAGE. Is the current request HTML? {self.isHTMLResponse(flow)}")
         if flow.response and self.isHTMLResponse(flow):
-            log.debug("INJECTING")
+            log.debug("Injecting WebStorageAnalyzer")
             HTML = flow.response.text
             
             if len(HTML) > 10_000_000:  # >10MB
@@ -118,7 +118,7 @@ class WebStorageAnalyzer:
 
                         await Promise.all(dbPromises);
 
-                        fetch("http://127.0.0.1:8080/webStorageDump", {{
+                        fetch("http://127.0.0.1:8888/webStorageDump", {{
                                 method: 'POST',
                                 headers: {{ 'Content-Type': 'application/json' }},
                                 body: JSON.stringify(webStorageData)
@@ -130,9 +130,9 @@ class WebStorageAnalyzer:
             if "<head>" in HTML:
                 modified = HTML.replace("<head>", f"<head>\n{JSPayload}", 1)
                 flow.response.set_text(modified)
-                log.info(f"Injected web storage script at path {{flow.request.url}}")
+                log.info(f"Injected web storage script at path {flow.request.url}")
             else:
-                log.info(f"Failed to inject web storage script at path {{flow.request.url}}. No <head> tag.")
+                log.info(f"Failed to inject web storage script at path {flow.request.url}. No <head> tag.")
         
         # print("WEBSTORAGEANALYZER, ANALYZEWEBSTORAGE: --- %s seconds ---" % (time.time() - start_time))
         # self.SessionAnalyzer.timings["webstorage"]["time"].append(time.time() - start_time)

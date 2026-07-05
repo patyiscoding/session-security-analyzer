@@ -33,11 +33,9 @@ class Helpers():
 
     def logWarning(self, flow, contents, path):
         self.addToResults(flow, contents, path, "Warning")
-        log.warning(f"{contents} at path {path}")
     
     def logVulnerability(self, flow, contents, path):
         self.addToResults(flow, contents, path, "Vulnerability")
-        log.critical(f"POTENTIAL VULNERABILITY FOUND: {contents} at path {path}")
 
 
     def addToResults(self, flow, contents, url, level):
@@ -100,11 +98,11 @@ class Helpers():
 
         if level == "Warning":
             self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"] += 1
+            log.warning(f"{contents} at path {url}")
         elif level == "Vulnerability":
             self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"] += 1
+            log.critical(f"POTENTIAL VULNERABILITY FOUND: {contents} at path {url}")
         else:
             return
-
-        log.info(f"ADDITION {convertedContents}, warnings: {self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["warnings"]}, vulns: {self.SessionAnalyzer.vulnerabilityScanResultsJSON["metadata"]["vulnerabilities"]}")
 
         vulnerabilityQueue.put(json.dumps(self.SessionAnalyzer.vulnerabilityScanResultsJSON))

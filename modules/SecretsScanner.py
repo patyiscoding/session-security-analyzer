@@ -29,7 +29,7 @@ class SecretsScanner():
         except yaml.YAMLError as exc:
             logging.exception(exc)
 
-    def lookForSecrets(self, flow, content=None):
+    def lookForSecrets(self, flow, content=None, location=None):
         # start_time = time.time()
 
         log.debug("EVALUATING SECRETS")
@@ -43,13 +43,17 @@ class SecretsScanner():
 
             isJSPath = hasattr(flow.response, "path") and str(flow.response.path).endswith(".js")
 
+            endsInJson = str(contentType).endswith("json")
+
             allowedTypes = ["text/html", "application/json", "text/plain", "text/javascript", "application/javascript"]
 
-            if isJSPath or (any(t in contentType for t in allowedTypes) and len(text) > 0) or ct is None:
+            if isJSPath or endsInJson or (any(t in contentType for t in allowedTypes) and len(text) > 0) or ct is None:
                 pass 
             else:
+                log.debug("Requirements for secrets scanning not met. Skipping secrets scan.")
                 return
             
+        # log.info(text)
         if not text:
             log.debug("Contents for secrets scanning are empty")
             return
@@ -58,11 +62,10 @@ class SecretsScanner():
             log.warning(f"Skipping secrets scan: response too large ({len(text)/1024/1024:.1f}MB)")
             return
 
-
-        self.lookForSecretsWithRegexes(flow, text)
+        self.lookForSecretsWithRegexes(flow, text, location)
         
         try:
-            task = asyncio.create_task(self.lookForSecretsWithGitLeaks(flow, text))
+            task = asyncio.create_task(self.lookForSecretsWithGitLeaks(flow, text, location))
             self.SessionAnalyzer.activeTasks.add(task)
             task.add_done_callback(lambda t: self.SessionAnalyzer.activeTasks.discard(t))
         except RuntimeError as e:
@@ -72,7 +75,7 @@ class SecretsScanner():
         # self.SessionAnalyzer.timings["secrets"]["time"].append(time.time() - start_time)
 
         
-    def lookForSecretsWithRegexes(self, flow, text):
+    def lookForSecretsWithRegexes(self, flow, text, location=None):
         log.debug("Starting regex secrets scan")
         matches = []
 
@@ -86,11 +89,15 @@ class SecretsScanner():
                 if len(match) > 700:
                     log.info("Skipping match found by SecretsScanner; length too big")
                     continue
-                self.Helpers.logVulnerability(flow, f"Found potentially sensitive string: {match}", flow.request.url)
+
+                if location:
+                    self.Helpers.logVulnerability(flow, f"Found potentially sensitive string in {location}: {match}", flow.request.url)
+                else:
+                    self.Helpers.logVulnerability(flow, f"Found potentially sensitive string: {match}", flow.request.url)
         log.debug(f"Finished regex secrets scan with {len(matches)} matches")
 
 
-    async def lookForSecretsWithGitLeaks(self, flow, text):
+    async def lookForSecretsWithGitLeaks(self, flow, text, location=None):
         process = None
         try:
             log.debug("Starting GitLeaks secrets scan")
@@ -128,7 +135,10 @@ class SecretsScanner():
                     secretValue = leak.get("Secret", "")
                     description = leak.get("Description", "")
                     
-                    self.Helpers.logVulnerability(flow, f"(GitLeaks) {description} {secretValue}", flow.request.url)
+                    if location:
+                        self.Helpers.logVulnerability(flow, f"(GitLeaks) {location}: {description} {secretValue}", flow.request.url)
+                    else:
+                        self.Helpers.logVulnerability(flow, f"(GitLeaks) {description} {secretValue}", flow.request.url)
               
         except asyncio.CancelledError:
             log.debug("GitLeaks scan cancelled")

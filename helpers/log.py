@@ -28,7 +28,6 @@ logging.HASHCAT = HASHCAT
 
 
 class CustomFormatter(logging.Formatter):
-
     orange = "\x1b[38;2;191;136;26m"
     grey = "\x1b[38;20m"
     blue = "\x1b[38;2;0;128;128m"
@@ -67,3 +66,4 @@ ch.setFormatter(CustomFormatter())
 log.addHandler(ch)
 
 logging.getLogger("mitmproxy").setLevel(logging.WARNING)
+logging.getLogger("asyncio").setLevel(logging.WARNING)

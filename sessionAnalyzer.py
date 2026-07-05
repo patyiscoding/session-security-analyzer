@@ -48,12 +48,8 @@ class SessionAnalyzer:
         global SERVERSTARTED, analyzerInstance
         analyzerInstance = self
 
-        loader.add_option(
-            name="useAttackMode",
-            typespec=bool,
-            default=False,
-            help="Whether the script is to be run in attack mode",
-        )
+        loader.add_option(name="useAttackMode", typespec=bool, default=False, help="Whether the script is to be run in attack mode")
+        loader.add_option(name="localhostOnly", typespec=bool, default=True, help="Whether the script is to be run against localhost only")
 
         if current_process().name == 'MainProcess' and not SERVERSTARTED:
             SessionAnalyzer.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(vulnerabilityQueue,))
@@ -72,14 +68,14 @@ class SessionAnalyzer:
             log.warning(f"Failed to set up signal handler: {e}")
     
     def configure(self, options):
-        if "useAttackMode" in options:
-            log.info(f"Use Attack mode?: {ctx.options.useAttackMode}")
+        log.info(f"Use Attack mode?: {ctx.options.useAttackMode}")
+        log.info(f"localhost only?: {ctx.options.localhostOnly}")
 
     def request(self, flow: http.HTTPFlow):
-        if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
+        if ctx.options.localhostOnly == True and "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
             return
         
-        # skip WebSocket upgrade requests and CONNECT tunnels
+        # skip WebSocket upgrade requests and CONNECT
         if flow.request.method == "CONNECT" or flow.request.headers.get("Upgrade", "").lower() == "websocket":
             log.debug(f"Skipping {flow.request.method} request to {flow.request.url}")
             return
@@ -89,6 +85,7 @@ class SessionAnalyzer:
         
         start = time.perf_counter()
 
+        # disable cache
         if "If-None-Match" in flow.request.headers:
             del flow.request.headers["If-None-Match"]
             
@@ -133,14 +130,14 @@ class SessionAnalyzer:
                     if self.WebStorageAnalyzer.lastWebStorageDump == None:
                         self.WebStorageAnalyzer.lastWebStorageDump = jsonParsed
                     elif self.WebStorageAnalyzer.lastWebStorageDump == jsonParsed: # if the storage dump is the same as the last one, don't run the secrets scan
-                        log.debug("Skipping secrets evaluation")
+                        log.debug("Skipping Web Storage secrets evaluation")
                         return
 
                     for webStorageType in jsonParsed:
                         log.debug(f"Evaluating Web Storage Type {webStorageType}")
                         
                         webStorageDumpItem = json.dumps(dict(jsonParsed[webStorageType].items()))
-                        self.SecretsScanner.lookForSecrets(flow, webStorageDumpItem)
+                        self.SecretsScanner.lookForSecrets(flow, webStorageDumpItem, webStorageType)
 
                 except Exception as e:
                     log.error(f"Failed to process web storage dump: {e}")
@@ -151,7 +148,7 @@ class SessionAnalyzer:
             print(f"Time: {elapsed*1000:.1f}ms")
  
     def response(self, flow: http.HTTPFlow):
-        if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
+        if ctx.options.localhostOnly == True and "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
             return
         
         if ":5174" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the response is coming from the dashboard frontend, ignore it
