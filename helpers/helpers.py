@@ -1,5 +1,6 @@
 from helpers.log import log
 from dashboardServer import vulnerabilityQueue
+from queue import Full
 import re
 import http
 import copy
@@ -37,6 +38,16 @@ class Helpers():
     def logVulnerability(self, flow, contents, path):
         self.addToResults(flow, contents, path, "Vulnerability")
 
+    def truncate(self, text, limit=2048):
+        try:
+            if text is None:
+                return ""
+            s = str(text)
+        except Exception:
+            return ""
+        if len(s) > limit:
+            return s[:limit] + "\n...<truncated>..."
+        return s
 
     def addToResults(self, flow, contents, url, level):
         # split by / but ignore the ones in https:// or http://
@@ -65,7 +76,7 @@ class Helpers():
 
         lastToken = parts[-1] if len(parts) > 1 else "/" 
 
-        convertedContents = contents.encode('ascii', 'ignore').decode('ascii') # convert Unicode characters
+        convertedContents = contents.encode('ascii', 'ignore').decode('ascii') # convert Unicode characters        
 
         leaf = {
             "level": level,
@@ -75,12 +86,12 @@ class Helpers():
             "request": {    
                             "method": flow.request.method,
                             "statusCode": "",
-                            "contents": flow.request.get_text(strict=False).replace("\"", "'"),
+                            "contents": self.truncate(flow.request.get_text(strict=False)).replace("\"", "'"),
                             "headers": dict(flow.request.headers.items())
                         },
             "response": {
                             "statusCode": flow.response.status_code,
-                            "contents": flow.response.get_text(strict=False).replace("\"", "'"),
+                            "contents": self.truncate(flow.response.get_text(strict=False)).replace("\"", "'"),
                             "headers": dict(flow.request.headers.items())
                         }
         }
@@ -104,5 +115,4 @@ class Helpers():
             log.critical(f"POTENTIAL VULNERABILITY FOUND: {contents} at path {url}")
         else:
             return
-
         vulnerabilityQueue.put(json.dumps(self.SessionAnalyzer.vulnerabilityScanResultsJSON))

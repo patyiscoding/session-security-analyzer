@@ -28,12 +28,12 @@ class SessionAnalyzer:
         self.WebStorageAnalyzer = WebStorageAnalyzer(SessionAnalyzer=self)
         
 
-    activeGitLeaksProcesses = set()
-    activeTasks = set()
-    vulnerabilityScanResultsJSON = {
-        "metadata": {"warnings": 0, "vulnerabilities": 0},
-        "data": {}
-    }
+        self.activeGitLeaksProcesses = set()
+        self.activeTasks = set()
+        self.vulnerabilityScanResultsJSON = {
+            "metadata": {"warnings": 0, "vulnerabilities": 0},
+            "data": {}
+        }
     vulnerabilityServerProcess = None
     # timings = {
     #     "cookies": {"time": []},
@@ -146,6 +146,10 @@ class SessionAnalyzer:
         if elapsed > 0.05: # slower than 50ms
             print(f"SLOW REQUEST: {flow.request.method} {flow.request.url}")
             print(f"Time: {elapsed*1000:.1f}ms")
+        
+        if flow and flow.response and flow.request:
+            flow.response.content = b"" 
+            flow.request.content = b""
  
     def response(self, flow: http.HTTPFlow):
         if ctx.options.localhostOnly == True and "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
@@ -191,23 +195,23 @@ class SessionAnalyzer:
         failsafeThread = threading.Thread(target=force_exit_timeout, daemon=True)
         failsafeThread.start()
         
-        for task in list(SessionAnalyzer.activeTasks):
+        for task in list(self.activeTasks):
             if not task.done():
                 log.debug(f"Cancelling task: {task}")
                 task.cancel()
         
-        if current_process().name == 'MainProcess' and SessionAnalyzer.vulnerabilityServerProcess:
+        if current_process().name == 'MainProcess' and self.vulnerabilityServerProcess:
             log.debug("Terminating dashboard server process")
-            SessionAnalyzer.vulnerabilityServerProcess.terminate()
+            self.vulnerabilityServerProcess.terminate()
             try:
-                SessionAnalyzer.vulnerabilityServerProcess.join(timeout=1)
+                self.vulnerabilityServerProcess.join(timeout=1)
             except Exception as e:
                 log.error(f"Error joining server process: {e}")
 
         # kill all active GitLeaks subprocesses
-        if SessionAnalyzer.activeGitLeaksProcesses:
+        if self.activeGitLeaksProcesses:
             log.debug("Killing GitLeaks processes")
-            for process in list(SessionAnalyzer.activeGitLeaksProcesses):
+            for process in list(self.activeGitLeaksProcesses):
                 if process.returncode is None:
                     process.kill()
         

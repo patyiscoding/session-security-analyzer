@@ -296,8 +296,10 @@ class JWTAnalyzer:
             log.exception("Hashcat attack failed with exception: ", e)
 
     def runAndLogHashcat(self, process, flow, JWT):
-        self.logHashcatOutput(process, flow, JWT),
-        self.hashcatFinished(process)
+        try:
+            self.logHashcatOutput(process, flow, JWT)
+        finally:
+            self.hashcatFinished(process)
 
     def logHashcatOutput(self, process, flow, JWT):
         fullHashcatOutput = ""
