@@ -78,21 +78,21 @@ class Helpers():
 
         convertedContents = contents.encode('ascii', 'ignore').decode('ascii') # convert Unicode characters        
 
+        headers = dict(flow.request.headers.items())
+
         leaf = {
             "level": level,
             "contents": convertedContents, 
             "url": url,
-            "severity": "unknown",
             "request": {    
                             "method": flow.request.method,
-                            "statusCode": "",
                             "contents": self.truncate(flow.request.get_text(strict=False)).replace("\"", "'"),
-                            "headers": dict(flow.request.headers.items())
+                            "headers": headers
                         },
             "response": {
                             "statusCode": flow.response.status_code,
                             "contents": self.truncate(flow.response.get_text(strict=False)).replace("\"", "'"),
-                            "headers": dict(flow.request.headers.items())
+                            "headers": headers
                         }
         }
 
@@ -115,4 +115,5 @@ class Helpers():
             log.critical(f"POTENTIAL VULNERABILITY FOUND: {contents} at path {url}")
         else:
             return
+        
         vulnerabilityQueue.put(json.dumps(self.SessionAnalyzer.vulnerabilityScanResultsJSON))

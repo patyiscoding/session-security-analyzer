@@ -21,8 +21,10 @@ class JWTAnalyzer:
     hashcat = BASE_DIR / "../third-party/hashcat/hashcat.exe"
     rockyouwordlist = BASE_DIR / "../third-party/hashcat/wordlists/seclists/rockyou.txt"
     jwtsecretswordlist = BASE_DIR / "../third-party/wordlists/jwt-secrets/jwt.secrets.list"
+    JWTRegex = r"((?:[a-zA-Z0-9_-]+\.){2}[a-zA-Z0-9_-]+)"
 
     def lookForJWTs(self, flow: http.HTTPFlow):
+        
         # start_time = time.time()
 
         # From Authorization header
@@ -32,15 +34,15 @@ class JWTAnalyzer:
             self.evaluateJWT(AUTHORIZATION.split(" ")[1], flow)
 
         # From Cookie header
-        matches = re.findall(r"token=((?:[a-zA-Z0-9_-]+\.){2}[a-zA-Z0-9_-]+)", flow.request.headers.get("Cookie", ""))
+        matches = re.findall(rf"token={JWTAnalyzer.JWTRegex}", flow.request.headers.get("Cookie", ""))
         if len(matches) != 0 and matches[0] is not None:
             log.debug("Evaluating JWT from the Cookie header")
             for match in matches:
                 self.evaluateJWT(match, flow)
 
         # From URL
-        matches = re.findall(r"token=((?:[a-zA-Z0-9_-]+\.){2}[a-zA-Z0-9_-]+)", flow.request.url)
-        matches.extend(re.findall(r"jwt=((?:[a-zA-Z0-9_-]+\.){2}[a-zA-Z0-9_-]+)", flow.request.url))
+        matches = re.findall(rf"token={JWTAnalyzer.JWTRegex}", flow.request.url)
+        matches.extend(re.findall(rf"jwt={JWTAnalyzer.JWTRegex}", flow.request.url))
 
         if len(matches) != 0 and matches[0] is not None:
             log.debug("Evaluating JWT from the URL")
@@ -174,7 +176,7 @@ class JWTAnalyzer:
             log.exception(f"Failed to change claim {claimToChange} to {newClaimValue}")
         
         if JWTWithClaimChanged == None:
-            log.info("Couldn't carry out JWT role change attack")
+            log.warning("Could not carry out JWT role change attack")
             return
 
         attackFlow = flow.copy()
@@ -240,7 +242,7 @@ class JWTAnalyzer:
                 case "Active-Attack-Claim":
                     message = "rejected claim change"
                     
-            log.info(f"Server successfully {message} on {path} ({attackStatus})")
+            log.info(f"Server successfully {message} on {path} (Status: {attackStatus})")
         elif attackStatus == 200 or attackStatus == originalStatus:
             match attackHeader:
                 case "Active-Attack-AlgNone":
@@ -274,7 +276,7 @@ class JWTAnalyzer:
             with open("hashcatErrors.log", "w") as error_file:
                 process = subprocess.Popen(
                     ["./third-party/hashcat/hashcat.exe", # subprocess executing from root folder /third-party/hashcat/
-                        "-a", "0", 
+                        "-a", "0",
                         "--potfile-disable",
                         "-m", "16500",
                         JWT,
@@ -286,9 +288,7 @@ class JWTAnalyzer:
                     stderr=error_file
                 )
 
-                # outputThread = threading.Thread(target=lambda: self.logHashcatOutput(process), daemon=True)
                 outputThread = threading.Thread(target=self.runAndLogHashcat, args=(process, flow, JWT), daemon=True)
-
                 JWTAnalyzer.runningHashcats.append({"isRunning": 1, "process": process, "threadRef": outputThread}) # 1 = running, 0 = finished
 
                 outputThread.start()

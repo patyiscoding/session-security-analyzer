@@ -15,14 +15,9 @@ class HeadersAnalyzer:
         headers = flow.response.headers
         path = flow.request.url
 
-        # start_time = time.time()
-
         self.analyzeSTS(flow, headers, path)
-        # self.analyzeNoSniff(flow, headers, path)
         self.analyzeCORS(flow, headers, path)
         self.analyzeURL(flow, path)
-        # print("HEADERSANALYZER, ANALYZEHEADERS: --- %s seconds ---" % (time.time() - start_time))
-        # self.SessionAnalyzer.timings["headers"]["time"].append(time.time() - start_time)
 
     def analyzeSTS(self, flow, headers, path):
         STS = headers.get("Strict-Transport-Security", "")
@@ -38,14 +33,6 @@ class HeadersAnalyzer:
             else:
                 self.Helpers.logWarning(flow, f"Found Strict-Transport-Security header, but couldn't extract max-age", path)
 
-    # def analyzeNoSniff(self, flow, headers, path):
-    #     XCONTENT = headers.get("X‐Content‐Type‐Options", None)
-
-    #     if XCONTENT is None:
-    #         self.Helpers.logWarning(flow, f"Missing X‐Content‐Type‐Options: no-sniff header", path)
-    #     else:
-    #         if "no-sniff" not in XCONTENT:
-    #             self.Helpers.logWarning(flow, f"X‐Content‐Type‐Options header not set to 'no-sniff' value", path)
 
     def analyzeCORS(self, flow, responseHeaders, path):
         CORSCredentials = responseHeaders.get("Access-Control-Allow-Credentials")

@@ -30,19 +30,9 @@ class SessionAnalyzer:
 
         self.activeGitLeaksProcesses = set()
         self.activeTasks = set()
-        self.vulnerabilityScanResultsJSON = {
-            "metadata": {"warnings": 0, "vulnerabilities": 0},
-            "data": {}
-        }
-    vulnerabilityServerProcess = None
-    # timings = {
-    #     "cookies": {"time": []},
-    #     "headers": {"time": []},
-    #     "jwt": {"time": []},
-    #     "secrets": {"time": []},
-    #     "webstorage": {"time": []}
-    #     }
-    
+        self.vulnerabilityScanResultsJSON = {"metadata": {"warnings": 0, "vulnerabilities": 0}, "data": {}}
+        vulnerabilityServerProcess = None
+
 
     def load(self, loader: Loader):
         global SERVERSTARTED, analyzerInstance
@@ -52,8 +42,8 @@ class SessionAnalyzer:
         loader.add_option(name="localhostOnly", typespec=bool, default=True, help="Whether the script is to be run against localhost only")
 
         if current_process().name == 'MainProcess' and not SERVERSTARTED:
-            SessionAnalyzer.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(vulnerabilityQueue,))
-            SessionAnalyzer.vulnerabilityServerProcess.start()
+            self.vulnerabilityServerProcess = Process(target=startDashboardServer, args=(vulnerabilityQueue,))
+            self.vulnerabilityServerProcess.start()
             SERVERSTARTED = True
             log.info("Vulnerability Dashboard Server started on http://localhost:9999")
 
@@ -82,8 +72,6 @@ class SessionAnalyzer:
         
         if ":5174" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the request is coming from the dashboard frontend, ignore it
             return
-        
-        start = time.perf_counter()
 
         # disable cache
         if "If-None-Match" in flow.request.headers:
@@ -142,10 +130,6 @@ class SessionAnalyzer:
                 except Exception as e:
                     log.error(f"Failed to process web storage dump: {e}")
 
-        elapsed = time.perf_counter() - start
-        if elapsed > 0.05: # slower than 50ms
-            print(f"SLOW REQUEST: {flow.request.method} {flow.request.url}")
-            print(f"Time: {elapsed*1000:.1f}ms")
         
         if flow and flow.response and flow.request:
             flow.response.content = b"" 
@@ -157,34 +141,19 @@ class SessionAnalyzer:
         
         if ":5174" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the response is coming from the dashboard frontend, ignore it
             return
-        
-        start = time.perf_counter()
 
         if "Active-Attack" in flow.request.headers.get("X-Attack", ""):
             self.JWTAnalyzer.evaluateAttackResponse(flow, flow.request.headers.get("X-Attack"))
-            # TODO: add return
+            return
 
 
         self.Helpers.printResponse(flow)
-
         self.CookiesAnalyzer.evaluateSetCookies(flow)
         self.HeadersAnalyzer.analyzeHeaders(flow)
         self.WebStorageAnalyzer.analyzeWebStorage(flow)
         self.SecretsScanner.lookForSecrets(flow)
         self.JWTAnalyzer.lookForJWTs(flow)
 
-        elapsed = time.perf_counter() - start
-        if elapsed > 0.05: # slower than 50ms
-            print(f"SLOW RESPONSE: {flow.request.method} {flow.request.url}")
-            print(f"Time: {elapsed * 1000:.1f}ms")
-    
-        # print("")
-        # print(f"REQUESTS ANALYZED: {len(self.timings.get("headers").get("time", 0))}")
-        # print(f"WEBSTORAGE AVERAGE: {statistics.mean(self.timings.get("webstorage").get("time", 0))}")
-        # print(f"JWT AVERAGE: {statistics.mean(self.timings.get("jwt").get("time"))}")
-        # print(f"HEADERS AVERAGE: {statistics.mean(self.timings.get("headers").get("time"))}")
-        # print(f"SECRETS AVERAGE: {statistics.mean(self.timings.get("secrets").get("time"))}")
-        # print(f"COOKIES AVERAGE: {statistics.mean(self.timings.get("cookies").get("time", 0))}")
 
     def done(self):
         def force_exit_timeout():
@@ -226,58 +195,6 @@ class SessionAnalyzer:
         log.info("Shutdown complete, force exiting")
 
         os._exit(0)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        # if "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
-        #     return
-        # for runningHashcat in JWTAnalyzer.runningHashcats:
-        #     if runningHashcat["isRunning"] == 0:
-        #         continue
-
-        #     return_code = runningHashcat["process"].poll()
-
-        #     if return_code is None:
-        #         print("Still running...")
-        #     else:
-        #         # stdout, stderr = runningHashcat["process"].communicate()
-        #         print("Finished with code:", return_code)
-
-        #         print(runningHashcat["process"].stdout.read())
-        #         # if "Cracked" in stdout:
-        #         #     print("HURRAYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY")
-        #         runningHashcat["isRunning"] = 0
-
-        
-        # if flow.request.scheme == "http" and (AUTHORIZATION != "" or flow.request.headers.get("Cookie", "") != ""):
-        #     Helpers.logVulnerability(f'Sensitive data ({flow.request.headers.get("Authorization", "")} {flow.request.headers.get("Cookie", "")}) being sent over the insecure HTTP protocol')
-        
-       
-        
 
 
 addons = [SessionAnalyzer()]
