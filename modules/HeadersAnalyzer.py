@@ -29,9 +29,9 @@ class HeadersAnalyzer:
             if match:
                 maxAge = int(match.group(1))
                 maxAgeConverted = str(timedelta(seconds=maxAge))
-                self.Helpers.logVulnerability(flow, f"Strict-Transport-Security max-age: {maxAgeConverted}", path)
+                log.warning(f"Strict-Transport-Security max-age: {maxAgeConverted} at path {path}")
             else:
-                self.Helpers.logWarning(flow, f"Found Strict-Transport-Security header, but couldn't extract max-age", path)
+                log.warning(f"Found Strict-Transport-Security header, but couldn't extract max-age at path {path}")
 
 
     def analyzeCORS(self, flow, responseHeaders, path):
