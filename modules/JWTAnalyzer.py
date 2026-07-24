@@ -30,13 +30,13 @@ class JWTAnalyzer:
         # From Authorization header
         AUTHORIZATION = flow.request.headers.get("Authorization", "")
         if AUTHORIZATION.startswith("Bearer "):
-            log.debug("Evaluating JWT from the Authorization header")
+            log.debug("EVALUATING JWT from the Authorization header")
             self.evaluateJWT(AUTHORIZATION.split(" ")[1], flow)
 
         # From Cookie header
         matches = re.findall(rf"token={JWTAnalyzer.JWTRegex}", flow.request.headers.get("Cookie", ""))
         if len(matches) != 0 and matches[0] is not None:
-            log.debug("Evaluating JWT from the Cookie header")
+            log.debug("EVALUATING JWT from the Cookie header")
             for match in matches:
                 self.evaluateJWT(match, flow)
 
@@ -45,7 +45,7 @@ class JWTAnalyzer:
         matches.extend(re.findall(rf"jwt={JWTAnalyzer.JWTRegex}", flow.request.url))
 
         if len(matches) != 0 and matches[0] is not None:
-            log.debug("Evaluating JWT from the URL")
+            log.debug("EVALUATING JWT from the URL")
             for match in matches:
                 self.Helpers.logVulnerability(flow, f"JWT found in URL: {match}", flow.request.url)
                 self.evaluateJWT(match, flow)
@@ -56,7 +56,6 @@ class JWTAnalyzer:
 
 
     def evaluateJWT(self, JWT, flow):
-        log.debug("EVALUATING JWT")
         if JWT in JWTAnalyzer.discoveredJWTs:
             return
         

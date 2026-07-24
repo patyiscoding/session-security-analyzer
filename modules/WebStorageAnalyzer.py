@@ -31,8 +31,6 @@ class WebStorageAnalyzer:
         return False
 
     def analyzeWebStorage(self, flow):
-        # start_time = time.time()
-
         log.debug(f"EVALUATING WEB STORAGE. Is the current request HTML? {self.isHTMLResponse(flow)}")
         if flow.response and self.isHTMLResponse(flow):
             log.debug("Injecting WebStorageAnalyzer")

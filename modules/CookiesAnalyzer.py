@@ -33,7 +33,7 @@ class CookiesAnalyzer:
             isSensitive = any(sensitiveCookieName in cookieName for sensitiveCookieName in ["sess", "auth", "token", "jwt", "id", "user", "admin"])
 
             # HttpOnly, Secure, SameSite
-            if "httponly;" not in cookie:
+            if "httponly" not in cookie:
                 self.Helpers.logWarning(flow, f"Cookie {cookieName}: No HttpOnly attribute found. This cookie can be retrieved via JavaScript!", flow.request.url)
                
 
