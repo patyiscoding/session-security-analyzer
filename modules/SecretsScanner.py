@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import asyncio
 import os
+import platform
 import time
 import uuid
 
@@ -22,6 +23,8 @@ class SecretsScanner():
 
     SCRIPTDIR = Path(__file__).resolve().parent
     yamlPath = SCRIPTDIR / ".." / "third-party" / "awesome-regex-list" / "regexes.yml"
+
+    gitleaksPath = SCRIPTDIR / ".." / "third-party" /  "gitleaks.exe" if platform.system() == "Windows" else "gitleaks"
 
     with open(yamlPath) as stream:
         try:
@@ -104,7 +107,7 @@ class SecretsScanner():
             reportPath = f"gitleaks_{uuid.uuid4().hex}.json"
 
             process = await asyncio.create_subprocess_exec(
-                "./third-party/gitleaks.exe", "stdin", "--report-format=json", f"--report-path={reportPath}",
+                str(SecretsScanner.gitleaksPath), "stdin", "--report-format=json", f"--report-path={reportPath}",
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE

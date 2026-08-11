@@ -4,6 +4,7 @@ import jwt
 import json
 from mitmproxy import http, ctx
 import copy
+import platform
 import subprocess
 from pathlib import Path
 import re
@@ -18,13 +19,15 @@ class JWTAnalyzer:
     runningHashcats = []
 
     BASE_DIR = Path(__file__).resolve().parent
-    hashcat = BASE_DIR / "../third-party/hashcat/hashcat.exe"
+
+    hashcatBinName = "hashcat.exe" if platform.system() == "Windows" else "hashcat"
+    hashcat = BASE_DIR / "../third-party/hashcat" / hashcatBinName
     rockyouwordlist = BASE_DIR / "../third-party/hashcat/wordlists/seclists/rockyou.txt"
     jwtsecretswordlist = BASE_DIR / "../third-party/wordlists/jwt-secrets/jwt.secrets.list"
     JWTRegex = r"((?:[a-zA-Z0-9_-]+\.){2}[a-zA-Z0-9_-]+)"
 
     def lookForJWTs(self, flow: http.HTTPFlow):
-        
+        log.debug("EVALUATING JWTs")
         # start_time = time.time()
 
         # From Authorization header
@@ -274,7 +277,7 @@ class JWTAnalyzer:
 
             with open("hashcatErrors.log", "w") as error_file:
                 process = subprocess.Popen(
-                    ["./third-party/hashcat/hashcat.exe", # subprocess executing from root folder /third-party/hashcat/
+                    [str(JWTAnalyzer.hashcat),
                         "-a", "0",
                         "--potfile-disable",
                         "-m", "16500",

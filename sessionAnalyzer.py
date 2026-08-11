@@ -31,7 +31,7 @@ class SessionAnalyzer:
         self.activeGitLeaksProcesses = set()
         self.activeTasks = set()
         self.vulnerabilityScanResultsJSON = {"metadata": {"warnings": 0, "vulnerabilities": 0}, "data": {}}
-        vulnerabilityServerProcess = None
+        self.vulnerabilityServerProcess = None
 
 
     def load(self, loader: Loader):
@@ -61,6 +61,14 @@ class SessionAnalyzer:
         log.info(f"Use Attack mode?: {ctx.options.useAttackMode}")
         log.info(f"localhost only?: {ctx.options.localhostOnly}")
 
+    def server_connect(self, data):
+        if os.environ.get("RUNNING_IN_DOCKER") != "true":
+            return
+
+        host, port = data.server.address
+        if host in ("localhost", "127.0.0.1", "::1"):
+            data.server.address = ("host.docker.internal", port)
+
     def request(self, flow: http.HTTPFlow):
         if ctx.options.localhostOnly == True and "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
             return
@@ -70,7 +78,7 @@ class SessionAnalyzer:
             log.debug(f"Skipping {flow.request.method} request to {flow.request.url}")
             return
         
-        if ":5174" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the request is coming from the dashboard frontend, ignore it
+        if ":5174" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9900" in flow.request.url: # if the request is coming from the dashboard frontend, ignore it
             return
 
         # disable cache
@@ -139,7 +147,7 @@ class SessionAnalyzer:
         if ctx.options.localhostOnly == True and "localhost" not in flow.request.pretty_host and "127.0.0.1" not in flow.request.pretty_host:
             return
         
-        if ":5174" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9999" in flow.request.url: # if the response is coming from the dashboard frontend, ignore it
+        if ":5174" in flow.request.url or ":8080" in flow.request.url or ":9998" in flow.request.url or ":9900" in flow.request.url: # if the response is coming from the dashboard frontend, ignore it
             return
 
         if "Active-Attack" in flow.request.headers.get("X-Attack", ""):
