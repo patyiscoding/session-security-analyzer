@@ -3,8 +3,6 @@ import re
 from datetime import timedelta
 from helpers.helpers import Helpers
 import time
-
-
 class HeadersAnalyzer:
     def __init__(self, Helpers, SessionAnalyzer):
         self.Helpers = Helpers

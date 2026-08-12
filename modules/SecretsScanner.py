@@ -33,8 +33,6 @@ class SecretsScanner():
             logging.exception(exc)
 
     def lookForSecrets(self, flow, content=None, location=None):
-        # start_time = time.time()
-
         log.debug("EVALUATING SECRETS")
         if content:
             text = content
@@ -73,9 +71,6 @@ class SecretsScanner():
             task.add_done_callback(lambda t: self.SessionAnalyzer.activeTasks.discard(t))
         except RuntimeError as e:
             log.error(f"Failed to create GitLeaks task: {e}")
-        
-        # print("SECRETSSCANNER, LOOKFORSECRETS: --- %s seconds ---" % (time.time() - start_time))
-        # self.SessionAnalyzer.timings["secrets"]["time"].append(time.time() - start_time)
 
         
     def lookForSecretsWithRegexes(self, flow, text, location=None):

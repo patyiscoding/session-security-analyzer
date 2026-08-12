@@ -14,7 +14,6 @@ class CookiesAnalyzer:
     def evaluateSetCookies(self, flow):
         log.debug("EVALUATING SETCOOKIE")
         
-        # start_time = time.time()
         SETCOOKIES = flow.response.headers.get_all("Set-Cookie")
         if len(SETCOOKIES) == 0:
             return
@@ -62,7 +61,3 @@ class CookiesAnalyzer:
                     
                 if dt > now + timedelta(days=30) or dt <= now:
                     self.Helpers.logWarning(flow, f"Cookie {cookieName}'s expiry date is in the past or more than 30 days in the future ({dt - now})", flow.request.url)
-                    
-        
-        # print("COOKIESANALYZER, SET COOKIE: --- %s seconds ---" % (time.time() - start_time))
-        # self.SessionAnalyzer.timings["cookies"]["time"].append(time.time() - start_time)

@@ -28,7 +28,6 @@ class JWTAnalyzer:
 
     def lookForJWTs(self, flow: http.HTTPFlow):
         log.debug("EVALUATING JWTs")
-        # start_time = time.time()
 
         # From Authorization header
         AUTHORIZATION = flow.request.headers.get("Authorization", "")
@@ -52,11 +51,6 @@ class JWTAnalyzer:
             for match in matches:
                 self.Helpers.logVulnerability(flow, f"JWT found in URL: {match}", flow.request.url)
                 self.evaluateJWT(match, flow)
-        
-        # print("JWTANALYZER, LOOKFORJWTS: --- %s seconds ---" % (time.time() - start_time))
-        # self.SessionAnalyzer.timings["jwt"]["time"].append(time.time() - start_time)
-
-
 
     def evaluateJWT(self, JWT, flow):
         if JWT in JWTAnalyzer.discoveredJWTs:

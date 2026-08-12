@@ -36,7 +36,7 @@ class WebStorageAnalyzer:
             log.debug("Injecting WebStorageAnalyzer")
             HTML = flow.response.text
             
-            if len(HTML) > 10_000_000:  # >10MB
+            if len(HTML) > 10_000_000: # >10MB
                 log.warning(f"Skipping Web Storage analysis: HTML too large ({{len(HTML)/1024/1024:.1f}}MB)")
                 return
                 
@@ -131,6 +131,3 @@ class WebStorageAnalyzer:
                 log.info(f"Injected web storage script at path {flow.request.url}")
             else:
                 log.info(f"Failed to inject web storage script at path {flow.request.url}. No <head> tag.")
-        
-        # print("WEBSTORAGEANALYZER, ANALYZEWEBSTORAGE: --- %s seconds ---" % (time.time() - start_time))
-        # self.SessionAnalyzer.timings["webstorage"]["time"].append(time.time() - start_time)
